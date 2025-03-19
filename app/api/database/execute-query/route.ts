@@ -1,25 +1,23 @@
 import { NextResponse } from "next/server"
-import { executeTestQuery } from "@/lib/db-test"
+import { db } from "@/lib/db-mock"
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { query } = body
+    const { query } = await request.json()
 
     if (!query) {
-      return NextResponse.json({ success: false, error: "缺少查詢參數" }, { status: 400 })
+      return NextResponse.json({ error: "查询语句是必需的" }, { status: 400 })
     }
 
-    const result = await executeTestQuery(query)
+    console.log("执行查询:", query)
 
-    if (result.success) {
-      return NextResponse.json(result)
-    } else {
-      return NextResponse.json({ success: false, error: result.error }, { status: 500 })
-    }
+    // 使用模拟数据库执行查询
+    const result = await db.query(query)
+
+    return NextResponse.json({ result })
   } catch (error) {
-    console.error("查詢執行錯誤:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    console.error("执行查询时出错:", error)
+    return NextResponse.json({ error: error.message || "执行查询时出错" }, { status: 500 })
   }
 }
 

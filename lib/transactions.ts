@@ -1,4 +1,4 @@
-import { pool } from "@/lib/db"
+import { pool } from "./db"
 
 // 交易类型定义
 export interface Transaction {
@@ -19,7 +19,7 @@ export interface Transaction {
  */
 export async function createTransaction(transaction: Transaction) {
   try {
-    console.log("Creating transaction:", transaction)
+    console.log("创建交易记录:", transaction)
 
     const {
       member_id,
@@ -86,7 +86,7 @@ export async function createTransaction(transaction: Transaction) {
  */
 export async function getAllTransactions() {
   try {
-    console.log("Getting all transactions")
+    console.log("获取所有交易记录")
 
     const query = `
       SELECT 
@@ -144,7 +144,7 @@ export async function getAllTransactions() {
  */
 export async function getTransactionsByDate() {
   try {
-    console.log("Getting transactions by date")
+    console.log("获取按日期分组的交易记录")
 
     // 查询交易记录并按日期分组
     const result = await pool.query(`
@@ -211,7 +211,7 @@ export async function getTransactionsByDate() {
  */
 export async function getSignTableData() {
   try {
-    console.log("Getting sign table data")
+    console.log("获取签码表数据")
 
     const result = await pool.query(`
       SELECT 

@@ -85,28 +85,30 @@ export const pool = {
   },
 }
 
-// 模拟 SQL 模板标签函数
+// 导入模拟数据库实现
+// import { db, pool, testConnection } from './db-mock';
+
+// 导出模拟数据库实现
+// export { db, pool, testConnection };
+
+// SQL 模板标签函数
 export function sql(strings: TemplateStringsArray, ...values: any[]) {
-  // 构建查询字符串
-  let text = strings[0]
-  for (let i = 0; i < values.length; i++) {
-    text += `$${i + 1}${strings[i + 1] || ""}`
+  const text = strings.reduce((result, str, i) => {
+    return result + str + (i < values.length ? `$${i + 1}` : "")
+  }, "")
+
+  return {
+    text,
+    values,
+    execute: async () => {
+      try {
+        return await pool.query(text, values)
+      } catch (error) {
+        console.error("执行 SQL 查询时出错:", error)
+        throw error
+      }
+    },
   }
-
-  console.log("模拟 SQL 查询:", text)
-
-  // 处理特殊查询
-  if (text.toLowerCase().includes("select now()")) {
-    return { rows: [{ now: new Date().toISOString(), time: new Date().toISOString() }] }
-  }
-
-  // 简单的查询解析器，仅用于基本操作
-  if (text.toLowerCase().includes("select")) {
-    const tableName = extractTableName(text)
-    return { rows: mockDatabase[tableName] || [] }
-  }
-
-  return { rows: [] }
 }
 
 // 模拟数据库对象
@@ -152,4 +154,6 @@ function extractTableName(query: string): string {
 
 // 为了兼容性，导出 createPool
 export const createPool = () => pool
+
+// 导出模拟数据库实现;
 

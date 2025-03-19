@@ -1,130 +1,125 @@
-// 模拟数据库实现，不依赖任何外部模块
+// 模拟数据库实现
+export const db = {
+  query: async (sql: string, params: any[] = []) => {
+    console.log("模拟 SQL 查询:", sql)
+    console.log("参数:", params)
 
-// 模拟数据存储
-const mockDatabase: Record<string, any[]> = {
-  members: [
-    { id: 1, name: "张三", email: "zhangsan@example.com", points: 100 },
-    { id: 2, name: "李四", email: "lisi@example.com", points: 200 },
-    { id: 3, name: "王五", email: "wangwu@example.com", points: 150 },
-  ],
-  transactions: [
-    {
-      id: 1,
-      member_id: 1,
-      transaction_time: new Date(),
-      transaction_type: "购买",
-      amount: 100,
-      points: 10,
-      description: "购买商品",
-    },
-    {
-      id: 2,
-      member_id: 2,
-      transaction_time: new Date(),
-      transaction_type: "充值",
-      amount: 200,
-      points: 20,
-      description: "账户充值",
-    },
-  ],
-  signs: [
-    {
-      id: 1,
-      member_id: 1,
-      sign_time: new Date(),
-      sign_type: "签到",
-      points: 5,
-    },
-    {
-      id: 2,
-      member_id: 2,
-      sign_time: new Date(),
-      sign_type: "签到",
-      points: 5,
-    },
-  ],
-  points: [],
-  funds: [],
-}
-
-// 模拟数据库连接池
-export const pool = {
-  query: async (text: string, params: any[] = []) => {
-    console.log("模拟数据库查询:", { text, params })
-
-    // 简单的查询解析器，仅用于基本操作
-    if (text.toLowerCase().includes("select")) {
-      const tableName = extractTableName(text)
-      return { rows: mockDatabase[tableName] || [] }
+    // 根据查询类型返回不同的模拟数据
+    if (sql.toLowerCase().includes("select now()")) {
+      return {
+        rows: [{ now: new Date().toISOString(), time: new Date().toISOString() }],
+      }
     }
 
-    return { rows: [] }
+    if (sql.toLowerCase().includes("select * from members")) {
+      return {
+        rows: [
+          { id: 1, name: "张三", points: 100, created_at: new Date().toISOString() },
+          { id: 2, name: "李四", points: 200, created_at: new Date().toISOString() },
+        ],
+      }
+    }
+
+    if (sql.toLowerCase().includes("select * from transactions")) {
+      return {
+        rows: [
+          {
+            id: 1,
+            member_id: 1,
+            type: "deposit",
+            amount: 1000,
+            description: "初始存款",
+            created_at: new Date().toISOString(),
+            affects_points: false,
+            affects_funds: true,
+            point_type_id: null,
+            fund_category_id: 1,
+          },
+          {
+            id: 2,
+            member_id: 2,
+            type: "point_add",
+            amount: 500,
+            description: "积分奖励",
+            created_at: new Date(Date.now() - 86400000).toISOString(),
+            affects_points: true,
+            affects_funds: false,
+            point_type_id: 1,
+            fund_category_id: null,
+          },
+        ],
+      }
+    }
+
+    if (sql.toLowerCase().includes("select * from point_types")) {
+      return {
+        rows: [
+          { id: 1, name: "普通积分", description: "可用于兑换商品" },
+          { id: 2, name: "VIP积分", description: "VIP会员专用积分" },
+        ],
+      }
+    }
+
+    if (sql.toLowerCase().includes("select * from fund_categories")) {
+      return {
+        rows: [
+          { id: 1, name: "现金", description: "现金资金" },
+          { id: 2, name: "信用", description: "信用资金" },
+        ],
+      }
+    }
+
+    // 对于插入、更新和删除操作，返回成功
+    if (
+      sql.toLowerCase().includes("insert") ||
+      sql.toLowerCase().includes("update") ||
+      sql.toLowerCase().includes("delete")
+    ) {
+      return {
+        rows: [{ id: Math.floor(Math.random() * 1000) }],
+        rowCount: 1,
+      }
+    }
+
+    // 默认返回空结果
+    return { rows: [], rowCount: 0 }
   },
+
+  execute: async (sql: string, params: any[] = []) => {
+    return db.query(sql, params)
+  },
+}
+
+// 导出模拟池对象
+export const pool = {
+  query: db.query,
   connect: async () => {
     console.log("模拟数据库连接")
     return {
-      query: async () => ({ rows: [] }),
-      release: () => {},
+      query: db.query,
+      release: () => console.log("模拟释放连接"),
     }
   },
   end: async () => {
-    console.log("模拟数据库连接结束")
-  },
-  sql: async (strings: TemplateStringsArray, ...values: any[]) => {
-    // 构建查询字符串
-    let text = strings[0]
-    for (let i = 0; i < values.length; i++) {
-      text += `$${i + 1}${strings[i + 1] || ""}`
-    }
-
-    console.log("模拟 SQL 查询:", text)
-
-    // 简单的查询解析器，仅用于基本操作
-    if (text.toLowerCase().includes("select")) {
-      const tableName = extractTableName(text)
-      return { rows: mockDatabase[tableName] || [] }
-    }
-
-    return { rows: [] }
+    console.log("模拟关闭数据库连接池")
   },
 }
 
-// 模拟 SQL 模板标签函数
-export function sql(strings: TemplateStringsArray, ...values: any[]) {
-  // 构建查询字符串
-  let text = strings[0]
-  for (let i = 0; i < values.length; i++) {
-    text += `$${i + 1}${strings[i + 1] || ""}`
+// 测试连接函数
+export async function testConnection() {
+  try {
+    const result = await db.query("SELECT NOW() as time")
+    return {
+      success: true,
+      message: "数据库连接成功",
+      time: result.rows[0].time,
+    }
+  } catch (error) {
+    console.error("测试数据库连接失败:", error)
+    return {
+      success: false,
+      message: "数据库连接失败: " + (error.message || "未知错误"),
+    }
   }
-
-  console.log("模拟 SQL 查询:", text)
-
-  // 简单的查询解析器，仅用于基本操作
-  if (text.toLowerCase().includes("select")) {
-    const tableName = extractTableName(text)
-    return { rows: mockDatabase[tableName] || [] }
-  }
-
-  return { rows: [] }
-}
-
-// 模拟数据库对象
-export const db = {
-  query: pool.query,
-  connect: pool.connect,
-  end: pool.end,
-  sql: sql,
-}
-
-// 辅助函数：从 SQL 查询中提取表名
-function extractTableName(query: string): string {
-  // 非常简单的实现，仅用于演示
-  const fromMatch = query.match(/from\s+([a-z_]+)/i)
-  if (fromMatch && fromMatch[1]) {
-    return fromMatch[1]
-  }
-
-  // 默认返回空表
-  return ""
 }
 
