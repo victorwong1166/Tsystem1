@@ -1,25 +1,23 @@
-import { NextResponse } from "next/server"
-import { getTableStatistics } from "@/lib/db-test"
+import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const table = searchParams.get("table")
-
-    if (!table) {
-      return NextResponse.json({ success: false, error: "缺少表名參數" }, { status: 400 })
-    }
-
-    const result = await getTableStatistics(table)
-
-    if (result.success) {
-      return NextResponse.json(result)
-    } else {
-      return NextResponse.json({ success: false, error: result.error }, { status: 500 })
-    }
+    // Return mock data instead of actual database query
+    return NextResponse.json({
+      success: true,
+      message: "Database connection not configured yet",
+      data: {
+        tables: [
+          { name: "users", rows: 0 },
+          { name: "posts", rows: 0 },
+          { name: "comments", rows: 0 }
+        ]
+      }
+    });
   } catch (error) {
-    console.error("獲取表統計信息錯誤:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json(
+      { error: error.message || "An error occurred" },
+      { status: 500 }
+    );
   }
 }
-
