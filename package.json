@@ -1,14 +1,13 @@
-{
-  "name": "my-v0-project",
+  {
+  "name": "tsystem1",
   "version": "0.1.0",
   "private": true,
-  {
-    "scripts": {
-      "dev": "next dev",
-      "build": "next build",
-      "start": "next start"
-    }
-  }
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.2",
@@ -46,11 +45,11 @@
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "15.1.0",
+    "next": "^14.1.0",
     "next-themes": "latest",
-    "react": "^19",
+    "react": "^18.2.0",
     "react-day-picker": "8.10.1",
-    "react-dom": "^19",
+    "react-dom": "^18.2.0",
     "react-hook-form": "^7.54.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "latest",
