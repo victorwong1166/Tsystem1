@@ -1,34 +1,17 @@
-import { NextResponse } from "next/server"
-import webpush from "web-push"
+import { NextResponse } from 'next/server';
 
-// 設置 VAPID 詳細信息
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || "mailto:example@example.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
-  process.env.VAPID_PRIVATE_KEY || "",
-)
-
-export async function POST(request: Request) {
+export async function GET() {
   try {
-    const { subscription } = await request.json()
-
-    // 發送測試通知
-    await webpush.sendNotification(
-      subscription,
-      JSON.stringify({
-        title: "測試通知",
-        body: "您的推送通知設置成功！",
-        icon: "/icon.png",
-        data: {
-          url: "/dashboard",
-        },
-      }),
-    )
-
-    return NextResponse.json({ success: true })
+    // Return mock response instead of actual push test
+    return NextResponse.json({
+      success: true,
+      message: "Push notification test not configured yet",
+      data: { supported: true, configured: false }
+    });
   } catch (error) {
-    console.error("Error sending test notification:", error)
-    return NextResponse.json({ success: false, error: "Failed to send test notification" }, { status: 500 })
+    return NextResponse.json(
+      { error: error.message || "An error occurred" },
+      { status: 500 }
+    );
   }
 }
-
