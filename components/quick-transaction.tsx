@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -62,6 +62,7 @@ const defaultProjects: Project[] = [
 // 在 QuickTransaction 組件的參數中添加 initialData 參數
 export default function QuickTransaction({ initialData = null }) {
   const [transactionType, setTransactionType] = useState("deposit")
+  const [selectedButtonId, setSelectedButtonId] = useState<number | null>(null) // 新增：跟踪選中的按鈕ID
   const [selectedMember, setSelectedMember] = useState(null)
   const [amount, setAmount] = useState("")
   const [notes, setNotes] = useState("")
@@ -363,54 +364,35 @@ export default function QuickTransaction({ initialData = null }) {
     setIsCustomButtonDialogOpen(true)
   }
 
+  // 修改：更新按鈕點擊處理函數，同時設置交易類型和選中的按鈕ID
   const handleCustomButtonClick = (button) => {
     setTransactionType(button.type)
-    // 可以根據需要設置其他相關字段
+    setSelectedButtonId(button.id) // 設置選中的按鈕ID
   }
 
   return (
     <Card className="shadow-md">
       <CardContent className="pt-6">
         <div className="mb-4">
+          <h3 className="text-lg font-medium mb-2">選擇會員</h3>
+          <MemberSelect onSelect={(member) => setSelectedMember(member)} />
+        </div>
+
+        <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-lg font-medium">交易類型</h3>
             {/* 移除自定義按鈕，只有管理員可見 */}
           </div>
 
-          {/* 入金和出金按鈕 - 縮減70%寬度 */}
-          <div className="flex gap-2 mb-2 justify-center">
-            <Button
-              variant={transactionType === "deposit" ? "default" : "outline"}
-              className={`flex items-center justify-center w-[30%] ${
-                transactionType === "deposit" ? "bg-green-600 hover:bg-green-700" : ""
-              }`}
-              onClick={() => setTransactionType("deposit")}
-            >
-              <ArrowUpCircle className="mr-1 h-4 w-4" />
-              入金
-            </Button>
-            <Button
-              variant={transactionType === "withdrawal" ? "default" : "outline"}
-              className={`flex items-center justify-center w-[30%] ${
-                transactionType === "withdrawal" ? "bg-red-600 hover:bg-red-700" : ""
-              }`}
-              onClick={() => setTransactionType("withdrawal")}
-            >
-              <ArrowDownCircle className="mr-1 h-4 w-4" />
-              出金
-            </Button>
-          </div>
-
-          {/* 自定義按鈕 - 上下各5個 */}
+          {/* 自定義按鈕 - 上下各5個 - 修改：使用selectedButtonId而不是transactionType來決定按鈕樣式 */}
           <div className="grid grid-cols-5 gap-1 mb-1">
             {customButtons.slice(0, 5).map((button) => (
               <Button
                 key={button.id}
-                variant={transactionType === button.type ? "default" : "outline"}
+                variant={selectedButtonId === button.id ? "default" : "outline"}
                 size="sm"
                 className="text-xs p-1 h-8"
                 onClick={() => handleCustomButtonClick(button)}
-                // 移除右鍵編輯功能
               >
                 {button.name}
               </Button>
@@ -420,22 +402,15 @@ export default function QuickTransaction({ initialData = null }) {
             {customButtons.slice(5, 10).map((button) => (
               <Button
                 key={button.id}
-                variant={transactionType === button.type ? "default" : "outline"}
+                variant={selectedButtonId === button.id ? "default" : "outline"}
                 size="sm"
                 className="text-xs p-1 h-8"
                 onClick={() => handleCustomButtonClick(button)}
-                // 移除右鍵編輯功能
               >
                 {button.name}
               </Button>
             ))}
           </div>
-          {/* 移除右鍵提示文字 */}
-        </div>
-
-        <div className="mb-4">
-          <h3 className="text-lg font-medium mb-2">選擇會員</h3>
-          <MemberSelect onSelect={(member) => setSelectedMember(member)} />
         </div>
 
         <div className="mb-4">
