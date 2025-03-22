@@ -1,0 +1,19 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // 或 "mysql", "sqlite", "sqlserver", "mongodb" 等
+  url      = env("DATABASE_URL")
+}
+
+// 在这里定义您的数据模型
+// 例如:
+// model User {
+//   id    Int     @id @default(autoincrement())
+//   email String  @unique
+//   name  String?
+// }
