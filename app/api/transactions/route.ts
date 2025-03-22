@@ -4,9 +4,11 @@ import webpush from "web-push"
 
 // 設置 VAPID 詳細信息
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || "mailto:example@example.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
-  process.env.VAPID_PRIVATE_KEY || "",
+  process.env.VAPID_SUBJECT || "mailto:victorywong3379@gmail.com",
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BDMx4Chs0_Fr0x6wJo5Vx_GtuPuAQPBEOPOn4VWr5zJP2rNWCOsAi0fA-inYmWDSA6Uv_rAcLJJ1ZKHHZ5m-8Jg
+",
+  process.env.VAPID_PRIVATE_KEY || "jSi7FSLXxnQgRRPrIeCP93FQBFflMRO3ybMJo5XYcUA
+",
 )
 
 // 獲取所有訂閱
