@@ -19,7 +19,7 @@ export default async function AdminPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">管理面板</h1>
         <Button asChild variant="outline">
-          <Link href="/">访问前台</Link>
+          <Link href="/dashboard">访问前台</Link>
         </Button>
       </div>
 
