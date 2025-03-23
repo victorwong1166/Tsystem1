@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Settings, Users, PieChart, ClockIcon, DollarSign, Shield } from "lucide-react"
+import { LogOut, User, Settings, Users, PieChart, ClockIcon, DollarSign } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,12 +55,10 @@ export default function DashboardHeader() {
               <span className="inline-block">系統設置</span>
             </Button>
           </Link>
-          <Link href="/admin">
-            <Button variant="ghost" size="sm" className="text-xs sm:text-sm">
-              <Shield className="mr-1 h-4 w-4" />
-              <span className="inline-block">後台管理</span>
-            </Button>
-          </Link>
+          <Button variant="ghost" size="sm" className="text-xs sm:text-sm" onClick={handleLogout}>
+            <LogOut className="mr-1 h-4 w-4" />
+            <span className="inline-block">退出</span>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="relative h-8 w-8 rounded-full">
