@@ -1,26 +1,21 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { toast } from "@/components/ui/use-toast"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trash2, Edit, Plus, MoveUp, MoveDown } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { Pencil, Trash2, Plus, MoveUp, MoveDown } from "lucide-react"
+import { toast } from "sonner"
 
+// 按鈕類型定義
 interface CustomButton {
   id: number
   name: string
@@ -31,701 +26,500 @@ interface CustomButton {
   icon?: string
   sortOrder: number
   isActive: boolean
+  createdAt: string
+  updatedAt: string
 }
+
+// 表單驗證模式
+const buttonFormSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1, "名稱不能為空"),
+  displayName: z.string().min(1, "顯示名稱不能為空"),
+  buttonType: z.string().min(1, "按鈕類型不能為空"),
+  value: z.string().min(1, "值不能為空"),
+  color: z.string().default("#3b82f6"),
+  icon: z.string().optional(),
+  sortOrder: z.number().default(0),
+  isActive: z.boolean().default(true),
+})
 
 export default function CustomButtonsManager() {
   const [buttons, setButtons] = useState<CustomButton[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [currentButton, setCurrentButton] = useState<CustomButton | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingButton, setEditingButton] = useState<CustomButton | null>(null)
 
-  // 新按鈕表單狀態
-  const [formData, setFormData] = useState({
-    name: "",
-    displayName: "",
-    buttonType: "transaction",
-    value: "",
-    color: "#3b82f6",
-    icon: "",
-    isActive: true,
+  // 初始化表單
+  const form = useForm<z.infer<typeof buttonFormSchema>>({
+    resolver: zodResolver(buttonFormSchema),
+    defaultValues: {
+      name: "",
+      displayName: "",
+      buttonType: "transaction",
+      value: "",
+      color: "#3b82f6",
+      icon: "",
+      sortOrder: 0,
+      isActive: true,
+    },
   })
 
-  // 獲取所有按鈕
+  // 加載按鈕數據
   const fetchButtons = async () => {
     try {
-      setLoading(true)
+      setIsLoading(true)
       const response = await fetch("/api/custom-buttons")
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        // 按排序順序排列
-        const sortedButtons = data.data.sort((a: CustomButton, b: CustomButton) => a.sortOrder - b.sortOrder)
-        setButtons(sortedButtons)
+      if (result.success) {
+        setButtons(result.data)
       } else {
-        toast({
-          title: "錯誤",
-          description: data.error || "獲取按鈕失敗",
-          variant: "destructive",
-        })
+        toast.error("獲取按鈕失敗")
       }
     } catch (error) {
       console.error("Error fetching buttons:", error)
-      toast({
-        title: "錯誤",
-        description: "獲取按鈕時發生錯誤",
-        variant: "destructive",
-      })
+      toast.error("獲取按鈕時發生錯誤")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
+  // 初始加載
   useEffect(() => {
     fetchButtons()
   }, [])
 
-  // 處理表單輸入變化
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  // 處理選擇變化
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  // 處理開關變化
-  const handleSwitchChange = (name: string, checked: boolean) => {
-    setFormData((prev) => ({ ...prev, [name]: checked }))
-  }
-
-  // 添加新按鈕
-  const handleAddButton = async () => {
-    try {
-      const response = await fetch("/api/custom-buttons", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          sortOrder: buttons.length, // 默認添加到最後
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "成功",
-          description: "按鈕已成功添加",
-        })
-
-        // 重置表單並關閉對話框
-        setFormData({
-          name: "",
-          displayName: "",
-          buttonType: "transaction",
-          value: "",
-          color: "#3b82f6",
-          icon: "",
-          isActive: true,
-        })
-        setIsAddDialogOpen(false)
-
-        // 重新獲取按鈕列表
-        fetchButtons()
-      } else {
-        toast({
-          title: "錯誤",
-          description: data.error || "添加按鈕失敗",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error adding button:", error)
-      toast({
-        title: "錯誤",
-        description: "添加按鈕時發生錯誤",
-        variant: "destructive",
-      })
-    }
-  }
-
   // 打開編輯對話框
-  const openEditDialog = (button: CustomButton) => {
-    setCurrentButton(button)
-    setFormData({
+  const handleEdit = (button: CustomButton) => {
+    setEditingButton(button)
+    form.reset({
+      id: button.id,
       name: button.name,
       displayName: button.displayName,
       buttonType: button.buttonType,
       value: button.value,
       color: button.color,
       icon: button.icon || "",
+      sortOrder: button.sortOrder,
       isActive: button.isActive,
     })
-    setIsEditDialogOpen(true)
+    setIsDialogOpen(true)
   }
 
-  // 更新按鈕
-  const handleUpdateButton = async () => {
-    if (!currentButton) return
+  // 打開新增對話框
+  const handleAdd = () => {
+    setEditingButton(null)
+    form.reset({
+      name: "",
+      displayName: "",
+      buttonType: "transaction",
+      value: "",
+      color: "#3b82f6",
+      icon: "",
+      sortOrder: buttons.length,
+      isActive: true,
+    })
+    setIsDialogOpen(true)
+  }
 
+  // 提交表單
+  const onSubmit = async (values: z.infer<typeof buttonFormSchema>) => {
     try {
-      const response = await fetch("/api/custom-buttons", {
-        method: "PUT",
+      setIsSubmitting(true)
+
+      const url = "/api/custom-buttons"
+      const method = editingButton ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          id: currentButton.id,
-          ...formData,
-        }),
+        body: JSON.stringify(values),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        toast({
-          title: "成功",
-          description: "按鈕已成功更新",
-        })
-
-        setIsEditDialogOpen(false)
+      if (result.success) {
+        toast.success(editingButton ? "按鈕已更新" : "按鈕已創建")
+        setIsDialogOpen(false)
         fetchButtons()
       } else {
-        toast({
-          title: "錯誤",
-          description: data.error || "更新按鈕失敗",
-          variant: "destructive",
-        })
+        toast.error(result.error || "操作失敗")
       }
     } catch (error) {
-      console.error("Error updating button:", error)
-      toast({
-        title: "錯誤",
-        description: "更新按鈕時發生錯誤",
-        variant: "destructive",
-      })
+      console.error("Error submitting form:", error)
+      toast.error("提交表單時發生錯誤")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   // 刪除按鈕
-  const handleDeleteButton = async (id: number) => {
-    if (!confirm("確定要刪除此按鈕嗎？")) return
+  const handleDelete = async (id: number) => {
+    if (!confirm("確定要刪除此按鈕嗎？")) {
+      return
+    }
 
     try {
       const response = await fetch(`/api/custom-buttons?id=${id}`, {
         method: "DELETE",
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        toast({
-          title: "成功",
-          description: "按鈕已成功刪除",
-        })
-
+      if (result.success) {
+        toast.success("按鈕已刪除")
         fetchButtons()
       } else {
-        toast({
-          title: "錯誤",
-          description: data.error || "刪除按鈕失敗",
-          variant: "destructive",
-        })
+        toast.error(result.error || "刪除失敗")
       }
     } catch (error) {
       console.error("Error deleting button:", error)
-      toast({
-        title: "錯誤",
-        description: "刪除按鈕時發生錯誤",
-        variant: "destructive",
-      })
+      toast.error("刪除按鈕時發生錯誤")
     }
   }
 
-  // 移動按鈕順序
-  const handleMoveButton = async (id: number, direction: "up" | "down") => {
+  // 調整排序
+  const handleReorder = async (id: number, direction: "up" | "down") => {
     const buttonIndex = buttons.findIndex((b) => b.id === id)
     if (buttonIndex === -1) return
 
-    // 如果已經是第一個或最後一個，則不能再移動
-    if (direction === "up" && buttonIndex === 0) return
-    if (direction === "down" && buttonIndex === buttons.length - 1) return
+    const newButtons = [...buttons]
+    const button = newButtons[buttonIndex]
 
-    const newIndex = direction === "up" ? buttonIndex - 1 : buttonIndex + 1
-    const targetButton = buttons[newIndex]
+    if (direction === "up" && buttonIndex > 0) {
+      const prevButton = newButtons[buttonIndex - 1]
 
-    try {
-      // 更新當前按鈕的排序
-      await fetch("/api/custom-buttons", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: id,
-          sortOrder: targetButton.sortOrder,
-        }),
-      })
-
-      // 更新目標按鈕的排序
-      await fetch("/api/custom-buttons", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: targetButton.id,
-          sortOrder: buttons[buttonIndex].sortOrder,
-        }),
-      })
-
-      // 重新獲取按鈕列表
-      fetchButtons()
-    } catch (error) {
-      console.error("Error moving button:", error)
-      toast({
-        title: "錯誤",
-        description: "移動按鈕順序時發生錯誤",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // 切換按鈕啟用狀態
-  const handleToggleActive = async (id: number, isActive: boolean) => {
-    try {
-      const response = await fetch("/api/custom-buttons", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: id,
-          isActive: !isActive,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "成功",
-          description: `按鈕已${!isActive ? "啟用" : "禁用"}`,
-        })
+      // 交換排序值
+      try {
+        await Promise.all([
+          fetch("/api/custom-buttons", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: button.id,
+              sortOrder: prevButton.sortOrder,
+            }),
+          }),
+          fetch("/api/custom-buttons", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: prevButton.id,
+              sortOrder: button.sortOrder,
+            }),
+          }),
+        ])
 
         fetchButtons()
-      } else {
-        toast({
-          title: "錯誤",
-          description: data.error || "更新按鈕狀態失敗",
-          variant: "destructive",
-        })
+      } catch (error) {
+        console.error("Error reordering buttons:", error)
+        toast.error("調整順序失敗")
       }
-    } catch (error) {
-      console.error("Error toggling button state:", error)
-      toast({
-        title: "錯誤",
-        description: "更新按鈕狀態時發生錯誤",
-        variant: "destructive",
-      })
+    } else if (direction === "down" && buttonIndex < newButtons.length - 1) {
+      const nextButton = newButtons[buttonIndex + 1]
+
+      // 交換排序值
+      try {
+        await Promise.all([
+          fetch("/api/custom-buttons", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: button.id,
+              sortOrder: nextButton.sortOrder,
+            }),
+          }),
+          fetch("/api/custom-buttons", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: nextButton.id,
+              sortOrder: button.sortOrder,
+            }),
+          }),
+        ])
+
+        fetchButtons()
+      } catch (error) {
+        console.error("Error reordering buttons:", error)
+        toast.error("調整順序失敗")
+      }
     }
   }
-
-  // 按鈕類型過濾
-  const transactionButtons = buttons.filter((button) => button.buttonType === "transaction")
-  const paymentButtons = buttons.filter((button) => button.buttonType === "payment")
-  const otherButtons = buttons.filter((button) => button.buttonType === "other")
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">自定義按鈕列表</h2>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> 添加按鈕
-        </Button>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-8">載入中...</div>
-      ) : (
-        <Tabs defaultValue="transaction">
-          <TabsList className="mb-4">
-            <TabsTrigger value="transaction">交易類型按鈕</TabsTrigger>
-            <TabsTrigger value="payment">支付方式按鈕</TabsTrigger>
-            <TabsTrigger value="other">其他按鈕</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="transaction">
-            {transactionButtons.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">暫無交易類型按鈕</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {transactionButtons.map((button) => (
-                  <ButtonCard
-                    key={button.id}
-                    button={button}
-                    onEdit={openEditDialog}
-                    onDelete={handleDeleteButton}
-                    onMove={handleMoveButton}
-                    onToggleActive={handleToggleActive}
-                  />
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>自定義按鈕列表</CardTitle>
+          <Button onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            新增按鈕
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center p-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+            </div>
+          ) : buttons.length === 0 ? (
+            <div className="text-center p-4 text-gray-500">尚未創建任何自定義按鈕</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>排序</TableHead>
+                  <TableHead>名稱</TableHead>
+                  <TableHead>顯示名稱</TableHead>
+                  <TableHead>類型</TableHead>
+                  <TableHead>值</TableHead>
+                  <TableHead>顏色</TableHead>
+                  <TableHead>狀態</TableHead>
+                  <TableHead>操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buttons.map((button) => (
+                  <TableRow key={button.id}>
+                    <TableCell className="flex items-center space-x-1">
+                      <span>{button.sortOrder}</span>
+                      <div className="flex flex-col">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleReorder(button.id, "up")}
+                        >
+                          <MoveUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleReorder(button.id, "down")}
+                        >
+                          <MoveDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>{button.name}</TableCell>
+                    <TableCell>{button.displayName}</TableCell>
+                    <TableCell>
+                      {button.buttonType === "transaction"
+                        ? "交易類型"
+                        : button.buttonType === "payment"
+                          ? "支付方式"
+                          : button.buttonType}
+                    </TableCell>
+                    <TableCell>{button.value}</TableCell>
+                    <TableCell>
+                      <div className="w-6 h-6 rounded-full" style={{ backgroundColor: button.color }} />
+                    </TableCell>
+                    <TableCell>
+                      {button.isActive ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                          啟用
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                          停用
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEdit(button)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => handleDelete(button.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            )}
-          </TabsContent>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-          <TabsContent value="payment">
-            {paymentButtons.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">暫無支付方式按鈕</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paymentButtons.map((button) => (
-                  <ButtonCard
-                    key={button.id}
-                    button={button}
-                    onEdit={openEditDialog}
-                    onDelete={handleDeleteButton}
-                    onMove={handleMoveButton}
-                    onToggleActive={handleToggleActive}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="other">
-            {otherButtons.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">暫無其他按鈕</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {otherButtons.map((button) => (
-                  <ButtonCard
-                    key={button.id}
-                    button={button}
-                    onEdit={openEditDialog}
-                    onDelete={handleDeleteButton}
-                    onMove={handleMoveButton}
-                    onToggleActive={handleToggleActive}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {/* 添加按鈕對話框 */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>添加新按鈕</DialogTitle>
-            <DialogDescription>創建一個新的自定義按鈕。填寫以下信息並點擊保存。</DialogDescription>
+            <DialogTitle>{editingButton ? "編輯按鈕" : "新增按鈕"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                名稱
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕內部名稱 (英文)"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="displayName" className="text-right">
-                顯示名稱
-              </Label>
-              <Input
-                id="displayName"
-                name="displayName"
-                value={formData.displayName}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕顯示名稱"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="buttonType" className="text-right">
-                按鈕類型
-              </Label>
-              <Select value={formData.buttonType} onValueChange={(value) => handleSelectChange("buttonType", value)}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="選擇按鈕類型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="transaction">交易類型</SelectItem>
-                  <SelectItem value="payment">支付方式</SelectItem>
-                  <SelectItem value="other">其他</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="value" className="text-right">
-                值
-              </Label>
-              <Input
-                id="value"
-                name="value"
-                value={formData.value}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕值 (英文)"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="color" className="text-right">
-                顏色
-              </Label>
-              <div className="col-span-3 flex gap-2">
-                <Input
-                  id="color"
-                  name="color"
-                  type="color"
-                  value={formData.color}
-                  onChange={handleInputChange}
-                  className="w-12"
-                />
-                <Input
-                  name="color"
-                  value={formData.color}
-                  onChange={handleInputChange}
-                  className="flex-1"
-                  placeholder="#3b82f6"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="icon" className="text-right">
-                圖標
-              </Label>
-              <Input
-                id="icon"
-                name="icon"
-                value={formData.icon}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="圖標名稱 (可選)"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="isActive" className="text-right">
-                啟用
-              </Label>
-              <div className="flex items-center space-x-2 col-span-3">
-                <Switch
-                  id="isActive"
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => handleSwitchChange("isActive", checked)}
-                />
-                <Label htmlFor="isActive">{formData.isActive ? "啟用" : "禁用"}</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleAddButton}>保存</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* 編輯按鈕對話框 */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>編輯按鈕</DialogTitle>
-            <DialogDescription>修改按鈕信息。填寫以下信息並點擊保存。</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                名稱
-              </Label>
-              <Input
-                id="edit-name"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {editingButton && (
+                <FormField
+                  control={form.control}
+                  name="id"
+                  render={({ field }) => <input type="hidden" {...field} value={editingButton.id} />}
+                />
+              )}
+
+              <FormField
+                control={form.control}
                 name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕內部名稱 (英文)"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>名稱 (系統標識)</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="例如: deposit" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-displayName" className="text-right">
-                顯示名稱
-              </Label>
-              <Input
-                id="edit-displayName"
+
+              <FormField
+                control={form.control}
                 name="displayName"
-                value={formData.displayName}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕顯示名稱"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>顯示名稱</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="例如: 存款" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-buttonType" className="text-right">
-                按鈕類型
-              </Label>
-              <Select value={formData.buttonType} onValueChange={(value) => handleSelectChange("buttonType", value)}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="選擇按鈕類型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="transaction">交易類型</SelectItem>
-                  <SelectItem value="payment">支付方式</SelectItem>
-                  <SelectItem value="other">其他</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-value" className="text-right">
-                值
-              </Label>
-              <Input
-                id="edit-value"
+
+              <FormField
+                control={form.control}
+                name="buttonType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>按鈕類型</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="選擇按鈕類型" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="transaction">交易類型</SelectItem>
+                        <SelectItem value="payment">支付方式</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="value"
-                value={formData.value}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="按鈕值 (英文)"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>值</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="例如: deposit" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-color" className="text-right">
-                顏色
-              </Label>
-              <div className="col-span-3 flex gap-2">
-                <Input
-                  id="edit-color"
-                  name="color"
-                  type="color"
-                  value={formData.color}
-                  onChange={handleInputChange}
-                  className="w-12"
-                />
-                <Input
-                  name="color"
-                  value={formData.color}
-                  onChange={handleInputChange}
-                  className="flex-1"
-                  placeholder="#3b82f6"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-icon" className="text-right">
-                圖標
-              </Label>
-              <Input
-                id="edit-icon"
+
+              <FormField
+                control={form.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>顏色</FormLabel>
+                    <div className="flex items-center space-x-2">
+                      <FormControl>
+                        <Input {...field} type="color" className="w-12 h-10" />
+                      </FormControl>
+                      <Input value={field.value} onChange={field.onChange} className="flex-1" />
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="icon"
-                value={formData.icon}
-                onChange={handleInputChange}
-                className="col-span-3"
-                placeholder="圖標名稱 (可選)"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>圖標 (可選)</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="例如: ArrowUp" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-isActive" className="text-right">
-                啟用
-              </Label>
-              <div className="flex items-center space-x-2 col-span-3">
-                <Switch
-                  id="edit-isActive"
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => handleSwitchChange("isActive", checked)}
-                />
-                <Label htmlFor="edit-isActive">{formData.isActive ? "啟用" : "禁用"}</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleUpdateButton}>保存</Button>
-          </DialogFooter>
+
+              <FormField
+                control={form.control}
+                name="sortOrder"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>排序順序</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        onChange={(e) => field.onChange(Number.parseInt(e.target.value) || 0)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>啟用狀態</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    取消
+                  </Button>
+                </DialogClose>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      處理中...
+                    </div>
+                  ) : editingButton ? (
+                    "更新"
+                  ) : (
+                    "創建"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-// 按鈕卡片組件
-function ButtonCard({
-  button,
-  onEdit,
-  onDelete,
-  onMove,
-  onToggleActive,
-}: {
-  button: CustomButton
-  onEdit: (button: CustomButton) => void
-  onDelete: (id: number) => void
-  onMove: (id: number, direction: "up" | "down") => void
-  onToggleActive: (id: number, isActive: boolean) => void
-}) {
-  return (
-    <Card className={`${!button.isActive ? "opacity-60" : ""}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: button.color }}></div>
-            {button.displayName}
-          </div>
-          <div className="flex space-x-1">
-            <Button variant="ghost" size="icon" onClick={() => onMove(button.id, "up")}>
-              <MoveUp className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => onMove(button.id, "down")}>
-              <MoveDown className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardTitle>
-        <CardDescription>
-          {button.name} ({button.value})
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="text-gray-500">類型:</div>
-          <div>
-            {button.buttonType === "transaction" && "交易類型"}
-            {button.buttonType === "payment" && "支付方式"}
-            {button.buttonType === "other" && "其他"}
-          </div>
-          <div className="text-gray-500">顏色:</div>
-          <div className="flex items-center">
-            {button.color}
-            <div className="w-3 h-3 rounded-full ml-2" style={{ backgroundColor: button.color }}></div>
-          </div>
-          <div className="text-gray-500">狀態:</div>
-          <div>{button.isActive ? "啟用" : "禁用"}</div>
-        </div>
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={() => onEdit(button)}>
-            <Edit className="h-4 w-4 mr-1" /> 編輯
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onDelete(button.id)}>
-            <Trash2 className="h-4 w-4 mr-1" /> 刪除
-          </Button>
-        </div>
-        <Switch checked={button.isActive} onCheckedChange={() => onToggleActive(button.id, button.isActive)} />
-      </CardFooter>
-    </Card>
   )
 }
 
