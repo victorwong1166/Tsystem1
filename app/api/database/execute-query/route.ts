@@ -3,6 +3,10 @@ import { db } from "@/lib/db-mock"
 
 export async function POST(request: Request) {
   try {
+    // Add at the beginning of the handler function
+    const customDatabaseUrl = request.headers.get("X-Custom-Database-Url")
+    const dbUrl = customDatabaseUrl || process.env.DATABASE_URL
+
     const { query } = await request.json()
 
     if (!query) {

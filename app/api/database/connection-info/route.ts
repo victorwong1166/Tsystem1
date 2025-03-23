@@ -1,22 +1,28 @@
 import { NextResponse } from "next/server"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // 檢查環境變量
-    if (!process.env.DATABASE_URL) {
+    // Get the URL parameters
+    const url = new URL(request.url)
+    const connectionString = url.searchParams.get("connectionString")
+
+    // Use the provided connection string or fall back to environment variable
+    const databaseUrl = connectionString || process.env.DATABASE_URL
+
+    if (!databaseUrl) {
       return NextResponse.json({
-        success: false,
+        connected: false,
         error: "DATABASE_URL 環境變量未設置",
         connectionInfo: null,
       })
     }
 
     // 解析連接字符串以提取信息
-    const connectionInfo = parseConnectionString(process.env.DATABASE_URL)
+    const connectionInfo = parseConnectionString(databaseUrl)
 
     // 嘗試連接以獲取更多信息
     const { neon } = await import("@neondatabase/serverless")
-    const sql = neon(process.env.DATABASE_URL)
+    const sql = neon(databaseUrl)
 
     try {
       // 獲取更多數據庫信息
@@ -32,7 +38,7 @@ export async function GET() {
       const dbInfo = result[0]
 
       return NextResponse.json({
-        success: true,
+        connected: true,
         connectionInfo: {
           ...connectionInfo,
           databaseName: dbInfo.database_name,
@@ -47,20 +53,19 @@ export async function GET() {
 
       // 如果無法獲取詳細信息，僅返回解析的連接信息
       return NextResponse.json({
-        success: true,
+        connected: false,
+        error: "無法連接到數據庫",
+        details: error.message,
         connectionInfo: connectionInfo,
-        note: "無法獲取詳細數據庫信息，僅顯示連接字符串解析結果",
       })
     }
   } catch (error) {
     console.error("Error getting database connection info:", error)
 
     return NextResponse.json({
-      success: false,
+      connected: false,
       error: "獲取數據庫連接信息失敗",
       details: error.message,
-      // 仍然返回解析的連接信息，即使連接失敗
-      connectionInfo: parseConnectionString(process.env.DATABASE_URL),
     })
   }
 }

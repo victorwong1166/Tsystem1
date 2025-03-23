@@ -40,6 +40,18 @@ export default function DatabaseTestingPanel() {
   const [recordCount, setRecordCount] = useState(100)
   const [tableStats, setTableStats] = useState<any>(null)
   const [isLoadingTableStats, setIsLoadingTableStats] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 檢查是否有自定義數據庫連接字符串
+  useEffect(() => {
+    const customDatabaseUrl = localStorage.getItem("customDatabaseUrl")
+    if (customDatabaseUrl) {
+      // 如果存在自定義連接字符串，則使用它
+      console.log("使用自定義數據庫連接字符串")
+      // 這裡可以添加使用自定義連接字符串的邏輯
+    }
+  }, [])
 
   // 清除模擬數據
   const clearMockData = async () => {
@@ -75,40 +87,53 @@ export default function DatabaseTestingPanel() {
   }
 
   // 檢查數據庫連接
-  const checkConnection = async () => {
+  const fetchConnectionInfo = async () => {
+    setIsLoading(true)
+    setError(null)
     setConnectionStatus("checking")
     setConnectionDetails(null)
 
     try {
-      const response = await fetch("/api/database/test-connection")
+      // 檢查是否有自定義連接字符串
+      const customDatabaseUrl = localStorage.getItem("customDatabaseUrl")
+      let url = "/api/database/connection-info"
+
+      // 如果有自定義連接字符串，則將其添加到請求中
+      if (customDatabaseUrl) {
+        url += `?connectionString=${encodeURIComponent(customDatabaseUrl)}`
+      }
+
+      const response = await fetch(url)
       const data = await response.json()
-      if (data.success) {
+
+      if (data.connected) {
         setConnectionStatus("connected")
-        setConnectionDetails(data)
+        setConnectionDetails(data.connectionInfo)
         toast({
           title: "連接成功",
-          description: `成功連接到數據庫 ${data.dbName}`,
+          description: `成功連接到數據庫 ${data.connectionInfo.database || data.connectionInfo.databaseName}`,
         })
       } else {
         setConnectionStatus("error")
         setConnectionDetails({ error: data.error })
+        setError(data.error || "未知錯誤")
         toast({
           title: "連接失敗",
           description: data.error,
           variant: "destructive",
         })
       }
-    } catch (error) {
-      console.error("Error checking connection:", error)
-      setConnectionStatus({
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error checking connection",
-      })
+    } catch (err: any) {
+      console.error("Error checking connection:", err)
+      setConnectionStatus("error")
+      setError(err.message || "發生錯誤")
       toast({
         title: "連接失敗",
-        description: error.message,
+        description: err.message,
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -127,11 +152,19 @@ export default function DatabaseTestingPanel() {
     setQueryResult(null)
 
     try {
+      // 準備請求頭，如果有自定義連接字符串，則添加到請求頭中
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      const customDatabaseUrl = localStorage.getItem("customDatabaseUrl")
+      if (customDatabaseUrl) {
+        headers["X-Custom-Database-Url"] = customDatabaseUrl
+      }
+
       const response = await fetch("/api/database/execute-query", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ query: testQuery }),
       })
 
@@ -299,7 +332,7 @@ export default function DatabaseTestingPanel() {
 
   // 初始檢查連接
   useEffect(() => {
-    checkConnection()
+    fetchConnectionInfo()
   }, [])
 
   return (
@@ -344,7 +377,7 @@ export default function DatabaseTestingPanel() {
                   </Badge>
                 )}
               </div>
-              <Button onClick={checkConnection} size="sm">
+              <Button onClick={fetchConnectionInfo} size="sm">
                 <RefreshCw className="mr-2 h-4 w-4" />
                 重新檢查
               </Button>
@@ -363,7 +396,7 @@ export default function DatabaseTestingPanel() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-sm font-medium text-gray-500">數據庫名稱</div>
-                    <div className="text-sm">{connectionDetails.dbName}</div>
+                    <div className="text-sm">{connectionDetails.database || connectionDetails.databaseName}</div>
                   </div>
                   <div>
                     <div className="text-sm font-medium text-gray-500">數據庫時間</div>
@@ -388,6 +421,105 @@ export default function DatabaseTestingPanel() {
                 </div>
               </div>
             )}
+
+            {/* 自行連接數據庫 */}
+            <div className="mt-4 rounded-md bg-white border border-gray-200 p-4 space-y-3">
+              <h3 className="text-md font-medium text-gray-700">自行連接數據庫</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="custom-host" className="block text-sm font-medium text-gray-500">
+                    主機
+                  </label>
+                  <input
+                    type="text"
+                    id="custom-host"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="例如: localhost 或 db.example.com"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="custom-port" className="block text-sm font-medium text-gray-500">
+                    端口
+                  </label>
+                  <input
+                    type="text"
+                    id="custom-port"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="例如: 5432"
+                    defaultValue="5432"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="custom-database" className="block text-sm font-medium text-gray-500">
+                    數據庫名稱
+                  </label>
+                  <input
+                    type="text"
+                    id="custom-database"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="例如: postgres"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="custom-user" className="block text-sm font-medium text-gray-500">
+                    用戶名
+                  </label>
+                  <input
+                    type="text"
+                    id="custom-user"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="例如: postgres"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="custom-password" className="block text-sm font-medium text-gray-500">
+                    密碼
+                  </label>
+                  <input
+                    type="password"
+                    id="custom-password"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="custom-ssl" className="block text-sm font-medium text-gray-500">
+                    SSL 模式
+                  </label>
+                  <select
+                    id="custom-ssl"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="require">require</option>
+                    <option value="prefer">prefer</option>
+                    <option value="disable">disable</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={() => {
+                    const host = (document.getElementById("custom-host") as HTMLInputElement).value
+                    const port = (document.getElementById("custom-port") as HTMLInputElement).value
+                    const database = (document.getElementById("custom-database") as HTMLInputElement).value
+                    const user = (document.getElementById("custom-user") as HTMLInputElement).value
+                    const password = (document.getElementById("custom-password") as HTMLInputElement).value
+                    const ssl = (document.getElementById("custom-ssl") as HTMLSelectElement).value
+
+                    const connectionString = `postgres://${user}:${password}@${host}:${port}/${database}?sslmode=${ssl}`
+
+                    // 將連接字符串存儲到 localStorage 中，以便在頁面刷新後仍然可用
+                    localStorage.setItem("customDatabaseUrl", connectionString)
+
+                    // 重新加載頁面以使用新的連接字符串
+                    window.location.reload()
+                  }}
+                >
+                  連接數據庫
+                </button>
+              </div>
+            </div>
 
             {connectionStatus === "error" && connectionDetails && (
               <Alert variant="destructive">
