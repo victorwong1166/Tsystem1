@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
@@ -10,14 +10,12 @@ export async function GET() {
         tables: [
           { name: "users", rows: 0 },
           { name: "posts", rows: 0 },
-          { name: "comments", rows: 0 }
-        ]
-      }
-    });
+          { name: "comments", rows: 0 },
+        ],
+      },
+    })
   } catch (error) {
-    return NextResponse.json(
-      { error: error.message || "An error occurred" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || "An error occurred" }, { status: 500 })
   }
 }
+

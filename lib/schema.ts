@@ -6,6 +6,7 @@ export const userStatusEnum = pgEnum("user_status", ["active", "inactive"])
 export const memberTypeEnum = pgEnum("member_type", ["shareholder", "agent", "regular"])
 export const transactionTypeEnum = pgEnum("transaction_type", ["buy_chips", "sell_chips", "sign_table", "dividend"])
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "bank", "wechat", "alipay"])
+export const buttonTypeEnum = pgEnum("button_type", ["transaction", "payment", "other"])
 
 // 用戶表 (系統用戶)
 export const users = pgTable("users", {
@@ -51,6 +52,22 @@ export const transactions = pgTable("transactions", {
   createdBy: integer("created_by")
     .references(() => users.id)
     .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+// 自定義按鈕表
+export const customButtons = pgTable("custom_buttons", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  buttonType: buttonTypeEnum("button_type").notNull(),
+  value: varchar("value", { length: 50 }).notNull(),
+  color: varchar("color", { length: 20 }).default("#3b82f6"), // 默認藍色
+  icon: varchar("icon", { length: 50 }),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

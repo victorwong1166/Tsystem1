@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server"
 
 export async function POST(request) {
   try {
@@ -6,12 +6,10 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: "Push notification subscription not configured yet",
-      data: { subscribed: false }
-    });
+      data: { subscribed: false },
+    })
   } catch (error) {
-    return NextResponse.json(
-      { error: error.message || "An error occurred" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || "An error occurred" }, { status: 500 })
   }
 }
+

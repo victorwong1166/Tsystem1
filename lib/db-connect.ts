@@ -1,18 +1,20 @@
 import { neon, neonConfig } from "@neondatabase/serverless"
 import { drizzle } from "drizzle-orm/neon-http"
 
-// 配置Neon客戶端
+// 配置 Neon 客戶端
 neonConfig.fetchConnectionCache = true
 
-// 創建數據庫連接
-const sql_client = neon(process.env.DATABASE_URL!)
-export const db = drizzle(sql_client)
+// 創建 SQL 客戶端
+const sql = neon(process.env.DATABASE_URL!)
+
+// 創建 Drizzle ORM 實例
+export const db = drizzle(sql)
 
 // 測試數據庫連接
 export async function testConnection() {
   try {
     const startTime = Date.now()
-    const result = await sql_client`SELECT NOW() as now, current_database() as db_name, version() as version`
+    const result = await sql`SELECT NOW() as now, current_database() as db_name, version() as version`
     const endTime = Date.now()
 
     return {
@@ -32,22 +34,23 @@ export async function testConnection() {
 export async function getDatabaseStats() {
   try {
     // 獲取表格數量
-    const tablesResult = await sql_client`
-      SELECT count(*) as table_count 
+    const tablesResult = await sql`
+      SELECT COUNT(*) as table_count 
       FROM information_schema.tables 
       WHERE table_schema = 'public'
     `
 
     // 獲取數據庫大小
-    const sizeResult = await sql_client`
+    const sizeResult = await sql`
       SELECT pg_size_pretty(pg_database_size(current_database())) as db_size
     `
 
-    // 獲取表格列表及其記錄數
-    const tablesInfoResult = await sql_client`
+    // 獲取表格列表及其列數
+    const tablesInfoResult = await sql`
       SELECT 
         table_name,
-        (SELECT count(*) FROM information_schema.columns WHERE table_name = t.table_name) as column_count
+        (SELECT COUNT(*) FROM information_schema.columns 
+         WHERE table_schema = 'public' AND table_name = t.table_name) as column_count
       FROM 
         information_schema.tables t
       WHERE 
@@ -56,10 +59,10 @@ export async function getDatabaseStats() {
         table_name
     `
 
-    // 獲取最近的查詢
-    const recentQueriesResult = await sql_client`
+    // 獲取最近的查詢統計
+    const recentQueriesResult = await sql`
       SELECT 
-        query,
+        substring(query, 1, 100) as query,
         calls,
         total_exec_time,
         rows,
@@ -69,14 +72,14 @@ export async function getDatabaseStats() {
       ORDER BY 
         total_exec_time DESC
       LIMIT 5
-    `
+    `.catch(() => []) // 如果 pg_stat_statements 擴展未啟用，返回空數組
 
     return {
       success: true,
       tableCount: tablesResult[0].table_count,
       dbSize: sizeResult[0].db_size,
       tables: tablesInfoResult,
-      recentQueries: recentQueriesResult || [],
+      recentQueries: recentQueriesResult,
     }
   } catch (error) {
     console.error("Error getting database stats:", error)
@@ -88,13 +91,15 @@ export async function getDatabaseStats() {
 export async function executeQuery(query: string, params: any[] = []) {
   try {
     const startTime = Date.now()
-    const result = await sql_client.query(query, params)
+    // 將參數轉換為 SQL 參數格式
+    const sqlParams = params.map((param) => sql`${param}`)
+    const result = await sql.query(query, sqlParams)
     const endTime = Date.now()
 
     return {
       success: true,
-      data: result.rows,
-      rowCount: result.rowCount,
+      data: result,
+      rowCount: result.length,
       duration: `${endTime - startTime}ms`,
     }
   } catch (error) {
@@ -106,7 +111,8 @@ export async function executeQuery(query: string, params: any[] = []) {
 // 獲取表結構信息
 export async function getTableSchema(tableName: string) {
   try {
-    const columnsResult = await sql_client`
+    // 獲取列信息
+    const columnsResult = await sql`
       SELECT 
         column_name, 
         data_type, 
@@ -116,12 +122,14 @@ export async function getTableSchema(tableName: string) {
       FROM 
         information_schema.columns
       WHERE 
+        table_schema = 'public' AND
         table_name = ${tableName}
       ORDER BY 
         ordinal_position
     `
 
-    const constraintsResult = await sql_client`
+    // 獲取約束信息
+    const constraintsResult = await sql`
       SELECT
         tc.constraint_name,
         tc.constraint_type,
@@ -135,6 +143,7 @@ export async function getTableSchema(tableName: string) {
       LEFT JOIN
         information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
       WHERE
+        tc.table_schema = 'public' AND
         tc.table_name = ${tableName}
     `
 

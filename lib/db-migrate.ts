@@ -2,13 +2,13 @@ import { neon } from "@neondatabase/serverless"
 import { drizzle } from "drizzle-orm/neon-http"
 
 // 創建數據庫連接
-const sql_client = neon(process.env.DATABASE_URL!)
-export const db = drizzle(sql_client)
+const sql = neon(process.env.DATABASE_URL!)
+export const db = drizzle(sql)
 
 // 測試數據庫連接
 export async function testConnection() {
   try {
-    const result = await sql_client`SELECT NOW()`
+    const result = await sql`SELECT NOW()`
     return { success: true, timestamp: result[0].now }
   } catch (error) {
     console.error("Database connection error:", error)
@@ -19,8 +19,10 @@ export async function testConnection() {
 // 執行原始SQL查詢
 export async function executeQuery(query: string, params: any[] = []) {
   try {
-    const result = await sql_client.query(query, params)
-    return { success: true, data: result.rows }
+    // 將參數轉換為 SQL 參數格式
+    const sqlParams = params.map((param) => sql`${param}`)
+    const result = await sql.query(query, sqlParams)
+    return { success: true, data: result }
   } catch (error) {
     console.error("Query execution error:", error)
     return { success: false, error: error.message }
@@ -32,15 +34,33 @@ export async function createTables() {
   try {
     // 創建枚舉類型
     await executeQuery(`
-      DO $$ BEGIN
-        CREATE TYPE IF NOT EXISTS user_role AS ENUM ('admin', 'user');
-        CREATE TYPE IF NOT EXISTS user_status AS ENUM ('active', 'inactive');
-        CREATE TYPE IF NOT EXISTS member_type AS ENUM ('shareholder', 'agent', 'regular');
-        CREATE TYPE IF NOT EXISTS transaction_type AS ENUM ('buy_chips', 'sell_chips', 'sign_table', 'dividend');
-        CREATE TYPE IF NOT EXISTS payment_method AS ENUM ('cash', 'bank', 'wechat', 'alipay');
-      EXCEPTION
-        WHEN duplicate_object THEN null;
-      END $$;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+          CREATE TYPE user_role AS ENUM ('admin', 'user');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_status') THEN
+          CREATE TYPE user_status AS ENUM ('active', 'inactive');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_type') THEN
+          CREATE TYPE member_type AS ENUM ('shareholder', 'agent', 'regular');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
+          CREATE TYPE transaction_type AS ENUM ('buy_chips', 'sell_chips', 'sign_table', 'dividend');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_method') THEN
+          CREATE TYPE payment_method AS ENUM ('cash', 'bank', 'wechat', 'alipay');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'button_type') THEN
+          CREATE TYPE button_type AS ENUM ('transaction', 'payment', 'other');
+        END IF;
+      END
+      $$;
     `)
 
     // 創建用戶表
@@ -82,12 +102,30 @@ export async function createTables() {
       CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
         transaction_id VARCHAR(20) NOT NULL UNIQUE,
-        member_id INTEGER REFERENCES members(id) NOT NULL,
+        member_id INTEGER NOT NULL REFERENCES members(id),
         type transaction_type NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
         payment_method payment_method,
         notes TEXT,
-        created_by INTEGER REFERENCES users(id) NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `)
+
+    // 創建自定義按鈕表
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS custom_buttons (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) NOT NULL,
+        display_name VARCHAR(100) NOT NULL,
+        button_type button_type NOT NULL,
+        value VARCHAR(50) NOT NULL,
+        color VARCHAR(20) DEFAULT '#3b82f6',
+        icon VARCHAR(50),
+        sort_order INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_by INTEGER REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
@@ -98,12 +136,12 @@ export async function createTables() {
       CREATE TABLE IF NOT EXISTS sign_tables (
         id SERIAL PRIMARY KEY,
         table_id VARCHAR(20) NOT NULL,
-        member_id INTEGER REFERENCES members(id) NOT NULL,
+        member_id INTEGER NOT NULL REFERENCES members(id),
         amount DECIMAL(10,2) NOT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'open',
         settled_at TIMESTAMP,
         transaction_id INTEGER REFERENCES transactions(id),
-        created_by INTEGER REFERENCES users(id) NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
@@ -119,7 +157,7 @@ export async function createTables() {
         share_unit DECIMAL(3,2) NOT NULL,
         dividend_per_unit DECIMAL(10,2) NOT NULL,
         notes TEXT,
-        created_by INTEGER REFERENCES users(id) NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `)
@@ -128,8 +166,8 @@ export async function createTables() {
     await executeQuery(`
       CREATE TABLE IF NOT EXISTS dividend_allocations (
         id SERIAL PRIMARY KEY,
-        dividend_id INTEGER REFERENCES dividends(id) NOT NULL,
-        member_id INTEGER REFERENCES members(id) NOT NULL,
+        dividend_id INTEGER NOT NULL REFERENCES dividends(id),
+        member_id INTEGER NOT NULL REFERENCES members(id),
         shares DECIMAL(5,2) NOT NULL,
         amount DECIMAL(10,2) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -164,7 +202,7 @@ export async function createTables() {
     await executeQuery(`
       CREATE TABLE IF NOT EXISTS telegram_bindings (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id),
         chat_id VARCHAR(50) NOT NULL UNIQUE,
         bind_code VARCHAR(10),
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -183,9 +221,47 @@ export async function createTables() {
         description TEXT,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         settings TEXT,
-        created_by INTEGER REFERENCES users(id) NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `)
+
+    // 創建結算表
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS settlements (
+        id SERIAL PRIMARY KEY,
+        settlement_id VARCHAR(20) NOT NULL UNIQUE,
+        period_number INTEGER NOT NULL,
+        date TIMESTAMP NOT NULL,
+        total_revenue DECIMAL(10,2) NOT NULL,
+        total_expenses DECIMAL(10,2) NOT NULL,
+        net_profit DECIMAL(10,2) NOT NULL,
+        notes TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `)
+
+    // 創建結算詳情表
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS settlement_details (
+        id SERIAL PRIMARY KEY,
+        settlement_id INTEGER NOT NULL REFERENCES settlements(id),
+        category VARCHAR(50) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        description TEXT
+      );
+    `)
+
+    // 創建結算賬戶變動表
+    await executeQuery(`
+      CREATE TABLE IF NOT EXISTS settlement_accounts (
+        id SERIAL PRIMARY KEY,
+        settlement_id INTEGER NOT NULL REFERENCES settlements(id),
+        account_type VARCHAR(50) NOT NULL,
+        opening_balance DECIMAL(10,2) NOT NULL,
+        closing_balance DECIMAL(10,2) NOT NULL
       );
     `)
 
