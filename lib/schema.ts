@@ -206,3 +206,14 @@ export const settlementAccounts = pgTable("settlement_accounts", {
   closingBalance: decimal("closing_balance", { precision: 10, scale: 2 }).notNull(),
 })
 
+// 文章表
+export const posts = pgTable("posts", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  authorId: integer("author_id").references(() => users.id),
+  published: boolean("published").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
