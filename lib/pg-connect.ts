@@ -1,5 +1,10 @@
 import { Pool } from "pg"
 
+// 檢查環境變量
+if (!process.env.DATABASE_URL) {
+  console.error("環境變量 DATABASE_URL 未設置")
+}
+
 // 創建 PostgreSQL 連接池
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -7,6 +12,36 @@ export const pool = new Pool({
     rejectUnauthorized: false,
   },
 })
+
+// 檢查連接
+export async function testConnection() {
+  if (!process.env.DATABASE_URL) {
+    return {
+      success: false,
+      message: "環境變量 DATABASE_URL 未設置",
+    }
+  }
+
+  try {
+    const client = await pool.connect()
+    try {
+      const result = await client.query("SELECT NOW() as time")
+      return {
+        success: true,
+        message: "數據庫連接成功",
+        time: result.rows[0].time,
+      }
+    } finally {
+      client.release()
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      message: "數據庫連接失敗",
+      error: error.message,
+    }
+  }
+}
 
 // 檢查表是否存在
 export async function checkTableExists(tableName: string): Promise<boolean> {
