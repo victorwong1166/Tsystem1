@@ -43,13 +43,36 @@ export default function DatabaseTestingPanel() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 新增表單狀態
+  const [host, setHost] = useState("localhost")
+  const [port, setPort] = useState("5432")
+  const [database, setDatabase] = useState("postgres")
+  const [username, setUsername] = useState("postgres")
+  const [password, setPassword] = useState("")
+  const [ssl, setSsl] = useState("require")
+  const [directConnectionString, setDirectConnectionString] = useState("")
+
   // 檢查是否有自定義數據庫連接字符串
   useEffect(() => {
     const customDatabaseUrl = localStorage.getItem("customDatabaseUrl")
     if (customDatabaseUrl) {
-      // 如果存在自定義連接字符串，則使用它
-      console.log("使用自定義數據庫連接字符串")
-      // 這裡可以添加使用自定義連接字符串的邏輯
+      console.log("使用自定義數據庫連接字符串:", customDatabaseUrl)
+      setDirectConnectionString(customDatabaseUrl)
+      // 嘗試解析連接字符串以填充表單
+      try {
+        const regex = /postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/
+        const match = customDatabaseUrl.match(regex)
+        if (match) {
+          setUsername(match[1])
+          setPassword(match[2])
+          setHost(match[3])
+          setPort(match[4])
+          setDatabase(match[5].split("?")[0])
+          setSsl(customDatabaseUrl.includes("sslmode=require") ? "require" : "disable")
+        }
+      } catch (e) {
+        console.error("解析連接字符串失敗:", e)
+      }
     }
   }, [])
 
@@ -83,6 +106,63 @@ export default function DatabaseTestingPanel() {
         description: error.message,
         variant: "destructive",
       })
+    }
+  }
+
+  // 直接測試連接字符串
+  const testDirectConnection = async () => {
+    if (!directConnectionString) {
+      toast({
+        title: "連接字符串為空",
+        description: "請輸入有效的 PostgreSQL 連接字符串",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    setConnectionStatus("checking")
+    setConnectionDetails(null)
+
+    try {
+      const response = await fetch("/api/database/test-direct-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ connectionString: directConnectionString }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setConnectionStatus("connected")
+        setConnectionDetails(data)
+        localStorage.setItem("customDatabaseUrl", directConnectionString)
+        toast({
+          title: "連接成功",
+          description: `成功連接到數據庫 ${data.dbName || data.database}`,
+        })
+      } else {
+        setConnectionStatus("error")
+        setConnectionDetails({ error: data.error })
+        toast({
+          title: "連接失敗",
+          description: data.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error testing connection:", error)
+      setConnectionStatus("error")
+      setConnectionDetails({ error: error.message })
+      toast({
+        title: "連接失敗",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -335,6 +415,31 @@ export default function DatabaseTestingPanel() {
     fetchConnectionInfo()
   }, [])
 
+  // 生成連接字符串
+  const generateConnectionString = () => {
+    const connectionString = `postgres://${username}:${password}@${host}:${port}/${database}?sslmode=${ssl}`
+    setDirectConnectionString(connectionString)
+    return connectionString
+  }
+
+  // 連接數據庫
+  const connectToDatabase = () => {
+    const connectionString = generateConnectionString()
+    localStorage.setItem("customDatabaseUrl", connectionString)
+    testDirectConnection()
+  }
+
+  // 清除自定義連接
+  const clearCustomConnection = () => {
+    localStorage.removeItem("customDatabaseUrl")
+    setDirectConnectionString("")
+    toast({
+      title: "已清除自定義連接",
+      description: "將使用環境變量中的數據庫連接",
+    })
+    window.location.reload()
+  }
+
   return (
     <Tabs defaultValue="connection" onValueChange={(value) => setTestType(value as any)}>
       <TabsList className="grid w-full grid-cols-4">
@@ -399,8 +504,16 @@ export default function DatabaseTestingPanel() {
                     <div className="text-sm">{connectionDetails.database || connectionDetails.databaseName}</div>
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-gray-500">數據庫時間</div>
-                    <div className="text-sm">{new Date(connectionDetails.timestamp).toLocaleString()}</div>
+                    <div className="text-sm font-medium text-gray-500">主機</div>
+                    <div className="text-sm">{connectionDetails.host}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-500">端口</div>
+                    <div className="text-sm">{connectionDetails.port}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-500">用戶名</div>
+                    <div className="text-sm">{connectionDetails.username}</div>
                   </div>
                 </div>
                 <div>
@@ -408,19 +521,45 @@ export default function DatabaseTestingPanel() {
                   <div className="text-sm">{connectionDetails.version}</div>
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-gray-500">響應時間</div>
-                  <div className="text-sm">{connectionDetails.responseTime}</div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500">連接字符串</div>
-                  <div className="text-sm font-mono bg-gray-100 p-2 rounded">
-                    {process.env.DATABASE_URL
-                      ? `${process.env.DATABASE_URL.split("@")[0].split(":")[0]}:****@${process.env.DATABASE_URL.split("@")[1]}`
-                      : "環境變量中未設置 DATABASE_URL"}
-                  </div>
+                  <div className="text-sm font-medium text-gray-500">SSL 模式</div>
+                  <div className="text-sm">{connectionDetails.ssl ? "啟用" : "禁用"}</div>
                 </div>
               </div>
             )}
+
+            {/* 直接輸入連接字符串 */}
+            <div className="mt-4 rounded-md bg-white border border-gray-200 p-4 space-y-3">
+              <h3 className="text-md font-medium text-gray-700">直接輸入連接字符串</h3>
+              <div className="space-y-2">
+                <label htmlFor="direct-connection-string" className="block text-sm font-medium text-gray-500">
+                  PostgreSQL 連接字符串
+                </label>
+                <input
+                  type="text"
+                  id="direct-connection-string"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  placeholder="postgres://username:password@host:port/database?sslmode=require"
+                  value={directConnectionString}
+                  onChange={(e) => setDirectConnectionString(e.target.value)}
+                />
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    onClick={testDirectConnection}
+                  >
+                    測試連接
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    onClick={clearCustomConnection}
+                  >
+                    清除自定義連接
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* 自行連接數據庫 */}
             <div className="mt-4 rounded-md bg-white border border-gray-200 p-4 space-y-3">
@@ -435,6 +574,8 @@ export default function DatabaseTestingPanel() {
                     id="custom-host"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="例如: localhost 或 db.example.com"
+                    value={host}
+                    onChange={(e) => setHost(e.target.value)}
                   />
                 </div>
                 <div>
@@ -446,7 +587,8 @@ export default function DatabaseTestingPanel() {
                     id="custom-port"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="例如: 5432"
-                    defaultValue="5432"
+                    value={port}
+                    onChange={(e) => setPort(e.target.value)}
                   />
                 </div>
                 <div>
@@ -458,6 +600,8 @@ export default function DatabaseTestingPanel() {
                     id="custom-database"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="例如: postgres"
+                    value={database}
+                    onChange={(e) => setDatabase(e.target.value)}
                   />
                 </div>
                 <div>
@@ -469,6 +613,8 @@ export default function DatabaseTestingPanel() {
                     id="custom-user"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="例如: postgres"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
                 <div>
@@ -479,6 +625,8 @@ export default function DatabaseTestingPanel() {
                     type="password"
                     id="custom-password"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
                 <div>
@@ -488,6 +636,8 @@ export default function DatabaseTestingPanel() {
                   <select
                     id="custom-ssl"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    value={ssl}
+                    onChange={(e) => setSsl(e.target.value)}
                   >
                     <option value="require">require</option>
                     <option value="prefer">prefer</option>
@@ -495,37 +645,34 @@ export default function DatabaseTestingPanel() {
                   </select>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex space-x-2">
                 <button
                   type="button"
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  onClick={() => {
-                    const host = (document.getElementById("custom-host") as HTMLInputElement).value
-                    const port = (document.getElementById("custom-port") as HTMLInputElement).value
-                    const database = (document.getElementById("custom-database") as HTMLInputElement).value
-                    const user = (document.getElementById("custom-user") as HTMLInputElement).value
-                    const password = (document.getElementById("custom-password") as HTMLInputElement).value
-                    const ssl = (document.getElementById("custom-ssl") as HTMLSelectElement).value
-
-                    const connectionString = `postgres://${user}:${password}@${host}:${port}/${database}?sslmode=${ssl}`
-
-                    // 將連接字符串存儲到 localStorage 中，以便在頁面刷新後仍然可用
-                    localStorage.setItem("customDatabaseUrl", connectionString)
-
-                    // 重新加載頁面以使用新的連接字符串
-                    window.location.reload()
-                  }}
+                  onClick={connectToDatabase}
                 >
                   連接數據庫
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={() => {
+                    const connectionString = generateConnectionString()
+                    setDirectConnectionString(connectionString)
+                  }}
+                >
+                  生成連接字符串
                 </button>
               </div>
             </div>
 
-            {connectionStatus === "error" && connectionDetails && (
+            {connectionStatus === "error" && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>連接錯誤</AlertTitle>
-                <AlertDescription>{connectionDetails.error}</AlertDescription>
+                <AlertDescription>
+                  {error || (connectionDetails && connectionDetails.error) || "未知錯誤"}
+                </AlertDescription>
               </Alert>
             )}
 
