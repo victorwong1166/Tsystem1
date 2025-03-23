@@ -1,91 +1,93 @@
-import type { ReactNode } from "react"
-import Link from "next/link"
-import { getServerSession } from "next-auth"
+import type React from "react"
 import { redirect } from "next/navigation"
+import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { LayoutDashboard, Users, Settings, Database, BarChart3, Layers } from "lucide-react"
+import Link from "next/link"
+import { LayoutDashboard, Users, Settings, CreditCard, Package, BarChart3, BoxIcon as ButtonIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface AdminLayoutProps {
-  children: ReactNode
+  children: React.ReactNode
 }
+
+const sidebarItems = [
+  {
+    title: "儀表板",
+    href: "/admin",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "用戶管理",
+    href: "/admin/users",
+    icon: Users,
+  },
+  {
+    title: "交易記錄",
+    href: "/admin/transactions",
+    icon: CreditCard,
+  },
+  {
+    title: "產品管理",
+    href: "/admin/products",
+    icon: Package,
+  },
+  {
+    title: "報表統計",
+    href: "/admin/reports",
+    icon: BarChart3,
+  },
+  {
+    title: "自定義按鈕",
+    href: "/admin/custom-buttons",
+    icon: ButtonIcon,
+  },
+  {
+    title: "系統設置",
+    href: "/admin/settings",
+    icon: Settings,
+  },
+]
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
   const session = await getServerSession(authOptions)
 
-  // 檢查用戶是否已登錄且是管理員
   if (!session || session.user.role !== "admin") {
     redirect("/login?callbackUrl=/admin")
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
       {/* 側邊欄 */}
-      <aside className="w-64 bg-white dark:bg-gray-800 shadow-md">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-xl font-bold text-gray-800 dark:text-white">管理後台</h1>
+      <div className="hidden md:flex md:w-64 md:flex-col">
+        <div className="flex flex-col flex-grow pt-5 overflow-y-auto bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+          <div className="flex items-center flex-shrink-0 px-4">
+            <h1 className="text-xl font-semibold">管理後台</h1>
+          </div>
+          <div className="mt-5 flex-1 flex flex-col">
+            <nav className="flex-1 px-2 pb-4 space-y-1">
+              {sidebarItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "group flex items-center px-2 py-2 text-sm font-medium rounded-md",
+                    "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                    "dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white",
+                  )}
+                >
+                  <item.icon className="mr-3 flex-shrink-0 h-6 w-6 text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
+                  {item.title}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </div>
-        <nav className="p-4">
-          <ul className="space-y-2">
-            <li>
-              <Link
-                href="/admin"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <LayoutDashboard className="w-5 h-5 mr-3" />
-                <span>儀表板</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/users"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <Users className="w-5 h-5 mr-3" />
-                <span>用戶管理</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/transactions"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <Database className="w-5 h-5 mr-3" />
-                <span>交易記錄</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/reports"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <BarChart3 className="w-5 h-5 mr-3" />
-                <span>報表統計</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/custom-buttons"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <Layers className="w-5 h-5 mr-3" />
-                <span>自定義按鈕</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/admin/settings"
-                className="flex items-center p-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              >
-                <Settings className="w-5 h-5 mr-3" />
-                <span>系統設置</span>
-              </Link>
-            </li>
-          </ul>
-        </nav>
-      </aside>
+      </div>
 
-      {/* 主要內容 */}
-      <main className="flex-1 p-6">{children}</main>
+      {/* 主內容區 */}
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <main className="flex-1 relative overflow-y-auto focus:outline-none p-6">{children}</main>
+      </div>
     </div>
   )
 }

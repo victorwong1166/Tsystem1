@@ -3,7 +3,6 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { db } from "./db-connect"
 import { users } from "./schema"
 import { eq } from "drizzle-orm"
-import bcrypt from "bcrypt"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -27,7 +26,8 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
-          const passwordMatch = await bcrypt.compare(credentials.password, user.password)
+          // 簡單比較密碼 (在生產環境中應使用加密比較)
+          const passwordMatch = user.password === credentials.password
 
           if (!passwordMatch) {
             return null

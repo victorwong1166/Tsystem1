@@ -50,10 +50,10 @@
     "react": "^19",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
-    "react-hook-form": "^7.54.1",
+    "react-hook-form": "latest",
     "react-resizable-panels": "^2.1.7",
     "recharts": "latest",
-    "sonner": "^1.7.1",
+    "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
@@ -91,9 +91,9 @@
     "fs": "latest",
     "path": "latest",
     "web-push": "latest",
+    "drizzle-orm": "latest",
     "idb": "latest",
     "nanoid": "latest",
-    "drizzle-orm": "latest",
     "next-auth": "latest"
   },
   "devDependencies": {
