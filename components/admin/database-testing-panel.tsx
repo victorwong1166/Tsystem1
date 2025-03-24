@@ -248,19 +248,24 @@ export default function DatabaseTestingPanel() {
         body: JSON.stringify({ query: testQuery }),
       })
 
-      const result = await response.json()
+      const data = await response.json()
 
-      if (result.success) {
-        setQueryResult(result)
+      if (data.success) {
+        setQueryResult({
+          success: true,
+          data: data.result,
+          rowCount: data.rowCount,
+          duration: data.duration || "N/A",
+        })
         toast({
           title: "查詢執行成功",
-          description: `查詢已成功執行，耗時 ${result.duration}`,
+          description: `查詢已成功執行${data.duration ? `，耗時 ${data.duration}` : ""}`,
         })
       } else {
-        setQueryResult({ success: false, error: result.error })
+        setQueryResult({ success: false, error: data.error })
         toast({
           title: "查詢執行失敗",
-          description: result.error,
+          description: data.error,
           variant: "destructive",
         })
       }
@@ -376,6 +381,12 @@ export default function DatabaseTestingPanel() {
     }
 
     try {
+      // 顯示加載狀態
+      toast({
+        title: "正在生成測試數據",
+        description: "請稍候...",
+      })
+
       const response = await fetch("/api/database/generate-test-data", {
         method: "POST",
         headers: {
@@ -384,27 +395,33 @@ export default function DatabaseTestingPanel() {
         body: JSON.stringify({ table: tableToTest, count: recordCount }),
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+
       const result = await response.json()
 
       if (result.success) {
         toast({
           title: "測試數據生成成功",
-          description: result.message,
+          description: result.message || `成功為 ${tableToTest} 表生成了 ${recordCount} 條測試數據`,
         })
 
         // 刷新表統計信息
         getTableStats()
       } else {
+        console.error("生成測試數據失敗:", result.error)
         toast({
           title: "測試數據生成失敗",
-          description: result.error,
+          description: result.error || "未知錯誤",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("生成測試數據時出錯:", error)
       toast({
         title: "測試數據生成失敗",
-        description: error.message,
+        description: error.message || "請檢查網絡連接和服務器狀態",
         variant: "destructive",
       })
     }
@@ -990,6 +1007,7 @@ export default function DatabaseTestingPanel() {
                     <Button
                       onClick={generateTestData}
                       disabled={!tableToTest || recordCount <= 0 || recordCount > 1000}
+                      className="w-full"
                     >
                       <Upload className="mr-2 h-4 w-4" />
                       生成測試數據
