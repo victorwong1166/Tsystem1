@@ -1,53 +1,71 @@
-import { NextResponse } from "next/server"
-import { getAllMembers } from "@/lib/members"
+import { type NextRequest, NextResponse } from "next/server"
+import { getAllMembers, createMember, searchMembers } from "@/lib/members-db"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 获取所有会员
-    const members = await getAllMembers()
-    return NextResponse.json(members)
-  } catch (error) {
-    console.error("获取会员列表失败:", error)
+    const searchParams = request.nextUrl.searchParams
+    const query = searchParams.get("query")
 
-    // 返回友好的错误信息
+    let members
+    if (query) {
+      members = await searchMembers(query)
+    } else {
+      members = await getAllMembers()
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: members,
+    })
+  } catch (error) {
+    console.error("獲取會員列表失敗:", error)
     return NextResponse.json(
       {
-        error: "获取会员列表失败",
-        details: error instanceof Error ? error.message : "未知错误",
+        success: false,
+        error: "獲取會員列表失敗",
       },
       { status: 500 },
     )
   }
 }
 
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
+    const body = await request.json()
 
-    // 验证必填字段
-    if (!data.name) {
-      return NextResponse.json({ error: "会员姓名为必填项" }, { status: 400 })
+    // 基本驗證
+    if (!body.name) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "會員姓名為必填項",
+        },
+        { status: 400 },
+      )
     }
 
-    // 导入创建会员函数
-    const { createMember } = await import("@/lib/members")
+    const newMember = await createMember(body)
 
-    // 创建新会员
-    const newMember = await createMember(data)
+    if (!newMember) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "創建會員失敗",
+        },
+        { status: 500 },
+      )
+    }
 
-    return NextResponse.json(newMember)
+    return NextResponse.json({
+      success: true,
+      data: newMember,
+    })
   } catch (error) {
-    console.error("创建会员失败:", error)
-
-    // 检查特定错误类型并返回友好的错误信息
-    if (error.message && error.message.includes('relation "members" does not exist')) {
-      return NextResponse.json({ error: "members 表不存在，请确保已正确设置数据库结构" }, { status: 500 })
-    }
-
+    console.error("創建會員失敗:", error)
     return NextResponse.json(
       {
-        error: "创建会员失败",
-        details: error instanceof Error ? error.message : "未知错误",
+        success: false,
+        error: "創建會員失敗",
       },
       { status: 500 },
     )

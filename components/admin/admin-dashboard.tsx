@@ -84,12 +84,18 @@ export default function AdminDashboard() {
           <h2 className="text-3xl font-bold tracking-tight">管理員儀表板</h2>
           <p className="text-muted-foreground">系統概覽和關鍵指標</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
             <Link href="/admin/database/test">數據庫測試</Link>
           </Button>
-          <Button asChild>
-            <Link href="/admin/database/test-write">數據寫入測試</Link>
+          <Button asChild variant="outline">
+            <Link href="/admin/database/connection">數據庫連接</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/database">數據庫管理</Link>
+          </Button>
+          <Button asChild variant="default" className="bg-green-600 hover:bg-green-700">
+            <Link href="/admin/database/initialize">初始化數據庫</Link>
           </Button>
         </div>
       </div>

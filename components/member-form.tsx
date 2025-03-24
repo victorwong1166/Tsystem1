@@ -1,227 +1,165 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
-import { showMemberCreationSuccess, showErrorNotification } from "@/lib/notifications"
-import { UserPlus, Save, ArrowLeft, Database } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import type { Member } from "@/lib/members-db"
 
-export default function MemberForm() {
-  const { toast } = useToast()
+interface MemberFormProps {
+  member?: Member
+  isEdit?: boolean
+}
+
+export default function MemberForm({ member, isEdit = false }: MemberFormProps) {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [dbInitializing, setDbInitializing] = useState(false)
-  const [showDbAlert, setShowDbAlert] = useState(false)
   const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    category: "regular",
-    agent_id: "",
-    notes: "",
+    name: member?.name || "",
+    phone: member?.phone || "",
+    email: member?.email || "",
+    address: member?.address || "",
+    category: member?.category || "regular",
+    agent_id: member?.agent_id?.toString() || "",
+    notes: member?.notes || "",
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const initializeDatabase = async () => {
-    try {
-      setDbInitializing(true)
-      const response = await fetch("/api/init-db", {
-        method: "GET",
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "數據庫初始化成功",
-          description: data.message,
-        })
-        setShowDbAlert(false)
-        return true
-      } else {
-        toast({
-          variant: "destructive",
-          title: "數據庫初始化失敗",
-          description: data.error,
-        })
-        return false
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "數據庫初始化錯誤",
-        description: error.message,
-      })
-      return false
-    } finally {
-      setDbInitializing(false)
-    }
-  }
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoading(true)
+    setError(null)
 
     try {
-      // 檢查必填欄位
-      if (!formData.name) {
-        toast({
-          variant: "destructive",
-          title: "錯誤",
-          description: "請填寫會員姓名",
-        })
-        setIsLoading(false)
-        return
+      // 驗證必填字段
+      if (!formData.name.trim()) {
+        throw new Error("會員姓名為必填項")
       }
 
-      const response = await fetch("/api/members", {
-        method: "POST",
+      // 準備提交數據
+      const submitData = {
+        ...formData,
+        agent_id: formData.agent_id ? Number.parseInt(formData.agent_id) : null,
+      }
+
+      // 根據是否為編輯模式決定API端點和方法
+      const url = isEdit ? `/api/members/${member?.id}` : "/api/members"
+      const method = isEdit ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-
-        // 如果是資料表不存在的錯誤，顯示初始化數據庫選項
-        if (errorData.error && errorData.error.includes("會員資料表不存在")) {
-          setShowDbAlert(true)
-          setIsLoading(false)
-          return
-        }
-
-        throw new Error(errorData.error || "創建會員失敗")
+        throw new Error(errorData.error || "提交表單失敗")
       }
 
-      const member = await response.json()
+      const data = await response.json()
 
-      // 顯示成功通知
-      showMemberCreationSuccess(member.name)
-
-      // 重定向到會員列表頁面
-      router.push("/members")
+      if (data.success) {
+        // 提交成功，重定向到會員列表或詳情頁
+        if (isEdit) {
+          router.push(`/members/${member?.id}`)
+        } else {
+          router.push("/members")
+        }
+        router.refresh() // 刷新頁面數據
+      } else {
+        throw new Error(data.error || "提交表單失敗")
+      }
     } catch (error) {
-      console.error("創建會員錯誤:", error)
-      showErrorNotification("創建會員失敗", error.message)
+      console.error("提交表單錯誤:", error)
+      setError(error instanceof Error ? error.message : "提交表單失敗")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-        <CardTitle className="flex items-center gap-2">
-          <UserPlus className="h-5 w-5" />
-          新增會員
-        </CardTitle>
-        <CardDescription>添加新會員到系統</CardDescription>
-      </CardHeader>
+    <Card>
+      <CardContent className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && <div className="rounded-md bg-red-50 p-4 text-red-600">{error}</div>}
 
-      {showDbAlert && (
-        <div className="px-6 pt-6">
-          <Alert variant="warning" className="bg-amber-50 border-amber-200">
-            <Database className="h-4 w-4" />
-            <AlertTitle>數據庫未初始化</AlertTitle>
-            <AlertDescription>
-              <p className="mb-2">系統檢測到會員資料表不存在，需要初始化數據庫。</p>
-              <Button onClick={initializeDatabase} disabled={dbInitializing} className="mt-2">
-                {dbInitializing ? "初始化中..." : "初始化數據庫"}
-              </Button>
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <CardContent className="p-6">
-          <div className="grid gap-6">
-            <div className="grid gap-2">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="name">
                 姓名 <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-                className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="請輸入會員姓名"
-              />
+              <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="phone">電話號碼</Label>
-              <Input
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="請輸入電話號碼"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="phone">電話</Label>
+              <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="category">會員類型</Label>
-              <Select
-                name="category"
-                value={formData.category}
-                onValueChange={(value) => handleSelectChange("category", value)}
-              >
-                <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                  <SelectValue placeholder="選擇會員類型" />
+            <div className="space-y-2">
+              <Label htmlFor="email">電子郵件</Label>
+              <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">類別</Label>
+              <Select value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="選擇類別" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="regular">普通會員</SelectItem>
+                  <SelectItem value="vip">VIP會員</SelectItem>
                   <SelectItem value="agent">代理</SelectItem>
                   <SelectItem value="shareholder">股東</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="grid gap-2">
+            <div className="space-y-2">
+              <Label htmlFor="agent_id">代理ID</Label>
+              <Input id="agent_id" name="agent_id" type="number" value={formData.agent_id} onChange={handleChange} />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="address">地址</Label>
+              <Input id="address" name="address" value={formData.address} onChange={handleChange} />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
               <Label htmlFor="notes">備註</Label>
-              <Textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={3}
-                className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                placeholder="請輸入備註信息（可選）"
-              />
+              <Textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} rows={4} />
             </div>
           </div>
-        </CardContent>
-        <CardFooter className="flex justify-between bg-gray-50 px-6 py-4 border-t">
-          <Button variant="outline" type="button" onClick={() => router.back()} className="flex items-center gap-1">
-            <ArrowLeft className="h-4 w-4" />
-            返回
-          </Button>
-          <Button type="submit" disabled={isLoading} className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700">
-            <Save className="h-4 w-4" />
-            {isLoading ? "處理中..." : "保存"}
-          </Button>
-        </CardFooter>
-      </form>
+
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
+              取消
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "提交中..." : isEdit ? "更新會員" : "創建會員"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   )
 }

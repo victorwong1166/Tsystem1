@@ -1,73 +1,88 @@
-import type { Metadata } from "next"
-import DashboardHeader from "@/components/dashboard-header"
-import MemberDetails from "@/components/member-details"
-import MemberTransactions from "@/components/member-transactions"
-import { Button } from "@/components/ui/button"
+import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Edit, DollarSign, CreditCard, TrendingUp, TrendingDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import DashboardHeader from "@/components/dashboard-header"
+import { getMemberById } from "@/lib/members-db"
 
-export const metadata: Metadata = {
-  title: "交易系統 - 會員詳情",
-  description: "交易系統會員詳情",
-}
+export default async function MemberDetailPage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  const id = Number.parseInt(params.id)
 
-export default function MemberPage({ params }) {
-  const { id } = params
+  if (isNaN(id)) {
+    notFound()
+  }
+
+  const member = await getMemberById(id)
+
+  if (!member) {
+    notFound()
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <DashboardHeader />
       <main className="flex-1 p-6">
-        <div className="mb-6">
-          <Link href="/members">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              返回會員列表
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-3xl font-bold">會員詳情</h1>
+          <div className="flex space-x-2">
+            <Button asChild variant="outline">
+              <Link href="/members">返回列表</Link>
             </Button>
-          </Link>
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold">會員詳情</h1>
-            <div className="flex space-x-2">
-              <Link href={`/transactions/buy-chips?memberId=${id}`}>
-                <Button variant="outline" size="sm">
-                  <DollarSign className="mr-2 h-4 w-4" />
-                  買碼
-                </Button>
-              </Link>
-              <Link href={`/transactions/redeem-chips?memberId=${id}`}>
-                <Button variant="outline" size="sm">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  兌碼
-                </Button>
-              </Link>
-              <Link href={`/transactions/sign?memberId=${id}`}>
-                <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700">
-                  <TrendingUp className="mr-2 h-4 w-4" />
-                  簽碼
-                </Button>
-              </Link>
-              <Link href={`/transactions/return?memberId=${id}`}>
-                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                  <TrendingDown className="mr-2 h-4 w-4" />
-                  還碼
-                </Button>
-              </Link>
-              <Link href={`/members/${id}/edit`}>
-                <Button>
-                  <Edit className="mr-2 h-4 w-4" />
-                  編輯
-                </Button>
-              </Link>
-            </div>
+            <Button asChild>
+              <Link href={`/members/${id}/edit`}>編輯會員</Link>
+            </Button>
           </div>
         </div>
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-1">
-            <MemberDetails id={id} />
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="rounded-lg border p-6 shadow-sm">
+            <h2 className="mb-4 text-xl font-semibold">基本信息</h2>
+            <dl className="grid gap-3">
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">ID:</dt>
+                <dd className="col-span-2">{member.id}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">姓名:</dt>
+                <dd className="col-span-2">{member.name}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">電話:</dt>
+                <dd className="col-span-2">{member.phone || "-"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">電子郵件:</dt>
+                <dd className="col-span-2">{member.email || "-"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">地址:</dt>
+                <dd className="col-span-2">{member.address || "-"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">類別:</dt>
+                <dd className="col-span-2">{member.category || "regular"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">代理ID:</dt>
+                <dd className="col-span-2">{member.agent_id || "-"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">創建時間:</dt>
+                <dd className="col-span-2">{member.created_at ? new Date(member.created_at).toLocaleString() : "-"}</dd>
+              </div>
+              <div className="grid grid-cols-3">
+                <dt className="font-medium text-gray-500">更新時間:</dt>
+                <dd className="col-span-2">{member.updated_at ? new Date(member.updated_at).toLocaleString() : "-"}</dd>
+              </div>
+            </dl>
           </div>
-          <div className="md:col-span-2">
-            <h2 className="mb-4 text-xl font-semibold">交易記錄</h2>
-            <MemberTransactions id={id} />
+
+          <div className="rounded-lg border p-6 shadow-sm">
+            <h2 className="mb-4 text-xl font-semibold">備註</h2>
+            <p className="whitespace-pre-wrap">{member.notes || "無備註"}</p>
           </div>
         </div>
       </main>

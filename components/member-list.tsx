@@ -1,153 +1,159 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { getAllMembers } from "@/lib/members"
-import { UserCircle, Calendar, Phone, Mail, Edit, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import type { Member } from "@/lib/members-db"
 
-export default function MemberList() {
-  const [members, setMembers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const { toast } = useToast()
+interface MemberListProps {
+  initialMembers?: Member[]
+}
 
+export default function MemberList({ initialMembers = [] }: MemberListProps) {
+  const [members, setMembers] = useState<Member[]>(initialMembers)
+  const [loading, setLoading] = useState(!initialMembers.length)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  // 如果沒有初始數據，則從API獲取
   useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        setLoading(true)
-        const data = await getAllMembers()
-        setMembers(data)
-      } catch (error) {
-        console.error("Failed to fetch members:", error)
-        toast({
-          title: "錯誤",
-          description: "無法獲取會員數據，請稍後再試",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+    if (initialMembers.length === 0) {
+      fetchMembers()
     }
+  }, [initialMembers.length])
 
-    fetchMembers()
-  }, [toast])
+  // 搜索功能
+  useEffect(() => {
+    if (searchQuery) {
+      const delayDebounceFn = setTimeout(() => {
+        fetchMembers(searchQuery)
+      }, 300)
+
+      return () => clearTimeout(delayDebounceFn)
+    } else if (searchQuery === "") {
+      fetchMembers()
+    }
+  }, [searchQuery])
+
+  const fetchMembers = async (query?: string) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const url = query ? `/api/members?query=${encodeURIComponent(query)}` : "/api/members"
+
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        throw new Error("獲取會員列表失敗")
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        setMembers(data.data)
+      } else {
+        throw new Error(data.error || "獲取會員列表失敗")
+      }
+    } catch (error) {
+      console.error("獲取會員列表錯誤:", error)
+      setError(error instanceof Error ? error.message : "獲取會員列表失敗")
+      setMembers([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleDelete = async (id: number) => {
-    // 這裡可以實現刪除會員的功能
-    toast({
-      title: "功能未實現",
-      description: "刪除會員功能尚未實現",
-      variant: "default",
-    })
-  }
+    if (!confirm("確定要刪除這個會員嗎？此操作不可撤銷。")) {
+      return
+    }
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+    try {
+      const response = await fetch(`/api/members/${id}`, {
+        method: "DELETE",
+      })
 
-  if (members.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-center">
-          <div className="flex flex-col items-center justify-center py-10">
-            <UserCircle className="h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium">尚無會員數據</h3>
-            <p className="mt-2 text-sm text-gray-500">目前系統中沒有任何會員記錄，請點擊「新增會員」按鈕添加。</p>
-            <Link href="/members/new" className="mt-4">
-              <Button>新增會員</Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    )
+      if (!response.ok) {
+        throw new Error("刪除會員失敗")
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        // 從列表中移除已刪除的會員
+        setMembers(members.filter((member) => member.id !== id))
+      } else {
+        throw new Error(data.error || "刪除會員失敗")
+      }
+    } catch (error) {
+      console.error("刪除會員錯誤:", error)
+      alert(error instanceof Error ? error.message : "刪除會員失敗")
+    }
   }
 
   return (
     <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>姓名</TableHead>
-              <TableHead>電話</TableHead>
-              <TableHead>電子郵件</TableHead>
-              <TableHead>註冊日期</TableHead>
-              <TableHead>狀態</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {members.map((member) => (
-              <TableRow key={member.id} className="hover:bg-muted/50">
-                <TableCell className="font-medium">{member.id}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <UserCircle className="h-5 w-5 text-primary" />
-                    {member.name}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-gray-500" />
-                    {member.phone || "未設置"}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-gray-500" />
-                    {member.email || "未設置"}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    {new Date(member.created_at).toLocaleDateString("zh-TW")}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={member.active ? "success" : "secondary"}>{member.active ? "活躍" : "非活躍"}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link href={`/members/edit/${member.id}`}>
-                      <Button variant="outline" size="icon">
-                        <Edit className="h-4 w-4" />
-                        <span className="sr-only">編輯</span>
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(member.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">刪除</span>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <CardContent className="p-6">
+        <div className="mb-4">
+          <Input
+            placeholder="搜索會員..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+
+        {error && <div className="mb-4 rounded-md bg-red-50 p-4 text-red-600">{error}</div>}
+
+        {loading ? (
+          <div className="flex h-40 items-center justify-center">
+            <p className="text-muted-foreground">載入中...</p>
+          </div>
+        ) : members.length === 0 ? (
+          <div className="flex h-40 items-center justify-center">
+            <p className="text-muted-foreground">{searchQuery ? "沒有找到符合條件的會員" : "暫無會員數據"}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>姓名</TableHead>
+                  <TableHead>電話</TableHead>
+                  <TableHead>電子郵件</TableHead>
+                  <TableHead>類別</TableHead>
+                  <TableHead>操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((member) => (
+                  <TableRow key={member.id}>
+                    <TableCell>{member.id}</TableCell>
+                    <TableCell>{member.name}</TableCell>
+                    <TableCell>{member.phone || "-"}</TableCell>
+                    <TableCell>{member.email || "-"}</TableCell>
+                    <TableCell>{member.category || "regular"}</TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/members/${member.id}`}>查看</Link>
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(member.id)}>
+                          刪除
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
