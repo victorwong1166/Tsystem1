@@ -88,6 +88,7 @@
     "@neondatabase/serverless": "latest",
     "@cloudflare/workers-types": "latest",
     "@op-engineering/op-sqlite": "latest",
+    "pg-native": "latest",
     "next-auth": "latest",
     "web-push": "latest",
     "idb": "latest",
