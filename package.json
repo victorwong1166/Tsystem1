@@ -59,6 +59,8 @@
     "vaul": "^0.9.6",
     "zod": "^3.24.1",
     "prisma": "latest",
+    "@auth/core": "latest",
+    "nodemailer": "latest",
     "pg": "latest",
     "gel": "latest",
     "knex": "latest",
@@ -86,12 +88,10 @@
     "@neondatabase/serverless": "latest",
     "@cloudflare/workers-types": "latest",
     "@op-engineering/op-sqlite": "latest",
-    "@auth/core": "latest",
-    "nodemailer": "latest",
-    "drizzle-orm": "latest",
-    "idb": "latest",
     "next-auth": "latest",
-    "web-push": "latest"
+    "web-push": "latest",
+    "drizzle-orm": "latest",
+    "idb": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
