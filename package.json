@@ -60,6 +60,7 @@
     "zod": "^3.24.1",
     "@auth/core": "latest",
     "nodemailer": "latest",
+    "prisma": "latest",
     "pg": "latest",
     "gel": "latest",
     "knex": "latest",
@@ -87,11 +88,10 @@
     "@neondatabase/serverless": "latest",
     "@cloudflare/workers-types": "latest",
     "@op-engineering/op-sqlite": "latest",
-    "prisma": "latest",
     "next-auth": "latest",
     "web-push": "latest",
-    "drizzle-orm": "latest",
-    "idb": "latest"
+    "idb": "latest",
+    "drizzle-orm": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

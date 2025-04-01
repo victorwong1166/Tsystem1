@@ -3,20 +3,48 @@ import { drizzle } from "drizzle-orm/neon-http"
 
 export async function migrateDatabase() {
   try {
-    const sql = neon(process.env.DATABASE_URL || "")
+    // 检查环境变量是否存在
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL 环境变量未设置")
+      return {
+        success: false,
+        message: "DATABASE_URL 环境变量未设置。请确保在环境变量中设置了有效的数据库连接字符串。",
+      }
+    }
+
+    console.log("尝试连接到数据库...")
+    const sql = neon(process.env.DATABASE_URL)
     const db = drizzle(sql)
 
-    console.log("Database connection established")
-    return { success: true, message: "Database connection successful" }
+    // 测试连接
+    const result = await sql`SELECT 1 as test`
+    console.log("数据库连接成功:", result)
+
+    return { success: true, message: "数据库连接成功" }
   } catch (error) {
-    console.error("Database migration error:", error)
-    return { success: false, message: "Database connection failed" }
+    console.error("数据库迁移错误:", error)
+    return {
+      success: false,
+      message: `数据库连接失败: ${error instanceof Error ? error.message : "未知错误"}`,
+    }
   }
 }
 
 export async function testConnection() {
   try {
-    const sql = neon(process.env.DATABASE_URL || "")
+    // 检查环境变量是否存在
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL 环境变量未设置")
+      return {
+        success: false,
+        error: "DATABASE_URL 环境变量未设置。请确保在环境变量中设置了有效的数据库连接字符串。",
+      }
+    }
+
+    console.log("尝试测试数据库连接...")
+    console.log("DATABASE_URL 前缀:", process.env.DATABASE_URL.substring(0, 20) + "...")
+
+    const sql = neon(process.env.DATABASE_URL)
     const result = await sql`SELECT NOW()`
 
     return {
@@ -25,17 +53,26 @@ export async function testConnection() {
       timestamp: result[0].now,
     }
   } catch (error) {
-    console.error("Database connection test error:", error)
+    console.error("数据库连接测试错误:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "未知错误",
     }
   }
 }
 
 export async function initializeDatabase() {
   try {
-    const sql = neon(process.env.DATABASE_URL || "")
+    // 检查环境变量是否存在
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL 环境变量未设置")
+      return {
+        success: false,
+        error: "DATABASE_URL 环境变量未设置。请确保在环境变量中设置了有效的数据库连接字符串。",
+      }
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
 
     // 创建用户表
     await sql`
@@ -67,17 +104,26 @@ export async function initializeDatabase() {
       message: "数据库初始化成功",
     }
   } catch (error) {
-    console.error("Database initialization error:", error)
+    console.error("数据库初始化错误:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "未知错误",
     }
   }
 }
 
 export async function executeQuery(query: string, params: any[] = []) {
   try {
-    const sql = neon(process.env.DATABASE_URL || "")
+    // 检查环境变量是否存在
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL 环境变量未设置")
+      return {
+        success: false,
+        error: "DATABASE_URL 环境变量未设置。请确保在环境变量中设置了有效的数据库连接字符串。",
+      }
+    }
+
+    const sql = neon(process.env.DATABASE_URL)
     const result = await sql(query, params)
 
     return {
@@ -85,10 +131,10 @@ export async function executeQuery(query: string, params: any[] = []) {
       data: result,
     }
   } catch (error) {
-    console.error("Query execution error:", error)
+    console.error("查询执行错误:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "未知错误",
     }
   }
 }
