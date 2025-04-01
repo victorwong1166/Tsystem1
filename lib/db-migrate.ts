@@ -45,12 +45,25 @@ export async function testConnection() {
     console.log("DATABASE_URL 前缀:", process.env.DATABASE_URL.substring(0, 20) + "...")
 
     const sql = neon(process.env.DATABASE_URL)
-    const result = await sql`SELECT NOW()`
+    const result = await sql`SELECT NOW() as current_time`
+
+    console.log("SQL 查询结果:", JSON.stringify(result))
+
+    // 检查结果是否为空或未定义
+    if (!result || result.length === 0) {
+      return {
+        success: false,
+        error: "数据库查询返回空结果",
+      }
+    }
+
+    // 安全地访问结果
+    const timestamp = result[0]?.current_time || new Date().toISOString()
 
     return {
       success: true,
       message: "数据库连接成功",
-      timestamp: result[0].now,
+      timestamp: timestamp,
     }
   } catch (error) {
     console.error("数据库连接测试错误:", error)

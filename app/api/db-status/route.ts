@@ -10,9 +10,21 @@ export async function GET() {
     if (process.env.DATABASE_URL) {
       // 只记录 URL 的前缀，不记录完整的连接字符串
       console.log("DATABASE_URL 前缀:", process.env.DATABASE_URL.substring(0, 20) + "...")
+    } else {
+      console.error("DATABASE_URL 环境变量未设置")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "DATABASE_URL 环境变量未设置",
+        },
+        { status: 500 },
+      )
     }
 
+    // 测试数据库连接
+    console.log("调用 testConnection 函数...")
     const result = await testConnection()
+    console.log("testConnection 结果:", JSON.stringify(result))
 
     return NextResponse.json(result, {
       status: result.success ? 200 : 500,
