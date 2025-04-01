@@ -90,7 +90,8 @@
     "nodemailer": "latest",
     "drizzle-orm": "latest",
     "idb": "latest",
-    "next-auth": "latest"
+    "next-auth": "latest",
+    "web-push": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
