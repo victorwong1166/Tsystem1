@@ -6,14 +6,28 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // 或 "mysql", "sqlite", "sqlserver", "mongodb" 等
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// 在这里定义您的数据模型
-// 例如:
-// model User {
-//   id    Int     @id @default(autoincrement())
-//   email String  @unique
-//   name  String?
-// }
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  posts     Post[]
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+}
+

@@ -1,95 +1,100 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getPostById, updatePost, deletePost, togglePublishPost } from "@/lib/pg-connect"
+import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 
-// 獲取單個文章
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+// GET 请求处理程序 - 获取单个帖子
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
-    if (isNaN(id)) {
-      return NextResponse.json({ message: "無效的文章ID" }, { status: 400 })
-    }
+    const id = params.id
 
-    const post = await getPostById(id)
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    })
+
     if (!post) {
-      return NextResponse.json({ message: "文章不存在" }, { status: 404 })
+      return NextResponse.json({ error: "帖子不存在" }, { status: 404 })
     }
 
-    return NextResponse.json(post)
-  } catch (error: any) {
-    console.error(`Error fetching post:`, error)
-    return NextResponse.json({ message: "獲取文章失敗", error: error.message }, { status: 500 })
+    return NextResponse.json({ post }, { status: 200 })
+  } catch (error) {
+    console.error("Error fetching post:", error)
+    return NextResponse.json({ error: "获取帖子时发生错误" }, { status: 500 })
   }
 }
 
-// 更新文章
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+// PATCH 请求处理程序 - 更新帖子
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
-    if (isNaN(id)) {
-      return NextResponse.json({ message: "無效的文章ID" }, { status: 400 })
+    const id = params.id
+    const body = await request.json()
+    const { title, content, published } = body
+
+    // 检查帖子是否存在
+    const existingPost = await prisma.post.findUnique({
+      where: { id },
+    })
+
+    if (!existingPost) {
+      return NextResponse.json({ error: "帖子不存在" }, { status: 404 })
     }
 
-    const { title, content } = await request.json()
+    // 更新帖子
+    const updatedPost = await prisma.post.update({
+      where: { id },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(content !== undefined && { content }),
+        ...(published !== undefined && { published }),
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    })
 
-    if (!title || !content) {
-      return NextResponse.json({ message: "標題和內容不能為空" }, { status: 400 })
-    }
-
-    const updatedPost = await updatePost(id, title, content)
-    if (!updatedPost) {
-      return NextResponse.json({ message: "文章不存在或更新失敗" }, { status: 404 })
-    }
-
-    return NextResponse.json(updatedPost)
-  } catch (error: any) {
-    console.error(`Error updating post:`, error)
-    return NextResponse.json({ message: "更新文章失敗", error: error.message }, { status: 500 })
+    return NextResponse.json({ post: updatedPost }, { status: 200 })
+  } catch (error) {
+    console.error("Error updating post:", error)
+    return NextResponse.json({ error: "更新帖子时发生错误" }, { status: 500 })
   }
 }
 
-// 刪除文章
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+// DELETE 请求处理程序 - 删除帖子
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
-    if (isNaN(id)) {
-      return NextResponse.json({ message: "無效的文章ID" }, { status: 400 })
+    const id = params.id
+
+    // 检查帖子是否存在
+    const existingPost = await prisma.post.findUnique({
+      where: { id },
+    })
+
+    if (!existingPost) {
+      return NextResponse.json({ error: "帖子不存在" }, { status: 404 })
     }
 
-    const success = await deletePost(id)
-    if (!success) {
-      return NextResponse.json({ message: "文章不存在或刪除失敗" }, { status: 404 })
-    }
+    // 删除帖子
+    await prisma.post.delete({
+      where: { id },
+    })
 
-    return NextResponse.json({ message: "文章已成功刪除" })
-  } catch (error: any) {
-    console.error(`Error deleting post:`, error)
-    return NextResponse.json({ message: "刪除文章失敗", error: error.message }, { status: 500 })
-  }
-}
-
-// 發布或取消發布文章
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const id = Number.parseInt(params.id)
-    if (isNaN(id)) {
-      return NextResponse.json({ message: "無效的文章ID" }, { status: 400 })
-    }
-
-    const { published } = await request.json()
-
-    if (typeof published !== "boolean") {
-      return NextResponse.json({ message: "發布狀態必須是布爾值" }, { status: 400 })
-    }
-
-    const updatedPost = await togglePublishPost(id, published)
-    if (!updatedPost) {
-      return NextResponse.json({ message: "文章不存在或更新失敗" }, { status: 404 })
-    }
-
-    return NextResponse.json(updatedPost)
-  } catch (error: any) {
-    console.error(`Error updating post publish status:`, error)
-    return NextResponse.json({ message: "更新文章發布狀態失敗", error: error.message }, { status: 500 })
+    return NextResponse.json({ message: "帖子已成功删除" }, { status: 200 })
+  } catch (error) {
+    console.error("Error deleting post:", error)
+    return NextResponse.json({ error: "删除帖子时发生错误" }, { status: 500 })
   }
 }
 
