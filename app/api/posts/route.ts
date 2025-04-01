@@ -2,15 +2,9 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
 // GET 请求处理程序 - 获取所有帖子
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const published = searchParams.get("published")
-
     const posts = await prisma.post.findMany({
-      where: {
-        ...(published !== null && { published: published === "true" }),
-      },
       include: {
         author: {
           select: {
@@ -19,9 +13,6 @@ export async function GET(request: Request) {
             email: true,
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
       },
     })
 
@@ -57,10 +48,8 @@ export async function POST(request: Request) {
       data: {
         title,
         content,
-        published: Boolean(published),
-        author: {
-          connect: { id: authorId },
-        },
+        published,
+        authorId,
       },
       include: {
         author: {
