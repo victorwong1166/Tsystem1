@@ -1,16 +1,22 @@
+import { PrismaAdapter } from "@auth/prisma-adapter"
 import type { NextAuthOptions } from "next-auth"
+import GithubProvider from "next-auth/providers/github"
 import CredentialsProvider from "next-auth/providers/credentials"
-import { db } from "./db-connect"
-import { users } from "./schema"
-import { eq } from "drizzle-orm"
+import { compare } from "bcryptjs"
+import prisma from "@/lib/db"
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
+    GithubProvider({
+      clientId: process.env.GITHUB_ID,
+      clientSecret: process.env.GITHUB_SECRET,
+    }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        email: { label: "邮箱", type: "email" },
+        password: { label: "密码", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -18,39 +24,42 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const user = await db.query.users.findFirst({
-            where: eq(users.email, credentials.email),
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email },
           })
 
           if (!user || !user.password) {
             return null
           }
 
-          // 簡單比較密碼 (在生產環境中應使用加密比較)
-          const passwordMatch = user.password === credentials.password
+          const isValid = await compare(credentials.password, user.password)
 
-          if (!passwordMatch) {
+          if (!isValid) {
             return null
           }
 
           return {
-            id: user.id.toString(),
+            id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
           }
         } catch (error) {
-          console.error("Authentication error:", error)
+          console.error("授权错误:", error)
           return null
         }
       },
     }),
   ],
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = user.role
+        token.role = user.role || "USER"
       }
       return token
     },
@@ -62,38 +71,10 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  secret: process.env.NEXTAUTH_SECRET,
-}
-
-// 擴展 next-auth 類型
-declare module "next-auth" {
-  interface User {
-    id: string
-    role: string
-  }
-
-  interface Session {
-    user: {
-      id: string
-      role: string
-      name?: string | null
-      email?: string | null
-      image?: string | null
-    }
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    id: string
-    role: string
-  }
+  debug: process.env.NODE_ENV === "development",
 }
 
