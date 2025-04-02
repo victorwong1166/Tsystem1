@@ -63,7 +63,8 @@
     "prisma": "latest",
     "next-auth": "latest",
     "bcryptjs": "latest",
-    "@prisma/client": "latest"
+    "@prisma/client": "latest",
+    "child_process": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
