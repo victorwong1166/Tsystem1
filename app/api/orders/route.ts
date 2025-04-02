@@ -1,97 +1,51 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
+import prisma from "@/lib/prisma"
+import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import prisma from "@/lib/db"
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return NextResponse.json({ error: "未授权访问" }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const skip = (page - 1) * limit
-
-    // 构建查询条件
-    const where: any = {}
-
-    // 如果不是管理员，只能查看自己的订单
-    if (session.user.role !== "ADMIN") {
-      where.userId = session.user.id
-    }
-
-    // 查询订单
     const orders = await prisma.order.findMany({
-      where,
       include: {
         user: {
           select: {
-            id: true,
             name: true,
             email: true,
           },
         },
         orderItems: {
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
+            product: true,
           },
         },
       },
-      skip,
-      take: limit,
-      orderBy: {
-        createdAt: "desc",
-      },
     })
 
-    // 获取总数
-    const total = await prisma.order.count({ where })
-
-    return NextResponse.json({
-      orders,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-      },
-    })
+    return NextResponse.json({ success: true, orders })
   } catch (error) {
-    console.error("获取订单列表失败:", error)
-    return NextResponse.json(
-      { error: "获取订单列表失败", details: error instanceof Error ? error.message : "未知错误" },
-      { status: 500 },
-    )
+    console.error("获取订单失败:", error)
+    return NextResponse.json({ success: false, error: "获取订单失败" }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
+    // 验证用户是否已登录
     const session = await getServerSession(authOptions)
 
-    if (!session) {
-      return NextResponse.json({ error: "未授权访问" }, { status: 403 })
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: "未授权" }, { status: 401 })
     }
 
     const data = await request.json()
 
-    // 验证输入
-    if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
-      return NextResponse.json({ error: "订单项不能为空" }, { status: 400 })
+    // 基本验证
+    if (!Array.isArray(data.items) || data.items.length === 0) {
+      return NextResponse.json({ success: false, error: "订单必须包含至少一个商品" }, { status: 400 })
     }
 
-    // 计算订单总金额并验证库存
-    let total = 0
+    // 计算总金额并验证商品
+    let totalAmount = 0
     const orderItems = []
 
     for (const item of data.items) {
@@ -100,24 +54,19 @@ export async function POST(request: Request) {
       })
 
       if (!product) {
-        return NextResponse.json({ error: `产品 ${item.productId} 不存在` }, { status: 400 })
+        return NextResponse.json({ success: false, error: `商品 ${item.productId} 不存在` }, { status: 400 })
       }
 
       if (product.stock < item.quantity) {
-        return NextResponse.json({ error: `产品 ${product.name} 库存不足` }, { status: 400 })
+        return NextResponse.json({ success: false, error: `商品 ${product.name} 库存不足` }, { status: 400 })
       }
 
-      total += product.price * item.quantity
+      totalAmount += product.price * item.quantity
+
       orderItems.push({
         productId: product.id,
         quantity: item.quantity,
         price: product.price,
-      })
-
-      // 更新库存
-      await prisma.product.update({
-        where: { id: product.id },
-        data: { stock: product.stock - item.quantity },
       })
     }
 
@@ -125,7 +74,8 @@ export async function POST(request: Request) {
     const order = await prisma.order.create({
       data: {
         userId: session.user.id,
-        total,
+        totalAmount,
+        status: "PENDING",
         orderItems: {
           create: orderItems,
         },
@@ -133,25 +83,28 @@ export async function POST(request: Request) {
       include: {
         orderItems: {
           include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-              },
-            },
+            product: true,
           },
         },
       },
     })
 
+    // 更新商品库存
+    for (const item of order.orderItems) {
+      await prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          stock: {
+            decrement: item.quantity,
+          },
+        },
+      })
+    }
+
     return NextResponse.json({ success: true, order }, { status: 201 })
   } catch (error) {
     console.error("创建订单失败:", error)
-    return NextResponse.json(
-      { error: "创建订单失败", details: error instanceof Error ? error.message : "未知错误" },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: false, error: "创建订单失败" }, { status: 500 })
   }
 }
 
