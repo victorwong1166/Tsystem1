@@ -8,19 +8,19 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/hooks/use-toast"
-import { Database, Server, AlertCircle, CheckCircle, XCircle, RefreshCw, Table, FileText, Clock } from 'lucide-react'
+import { Database, Server, AlertCircle, CheckCircle, XCircle, RefreshCw, Table, FileText, Clock } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function DatabaseConnectionTest() {
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "error">("checking")
   const [connectionDetails, setConnectionDetails] = useState<any>(null)
-  const [dbStats, setDbStats] = useState<any>({ tables: [], recentQueries: [] })
+  const [dbStats, setDbStats] = useState<any>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [sqlQuery, setSqlQuery] = useState("SELECT * FROM users LIMIT 5;")
   const [queryResult, setQueryResult] = useState<any>(null)
   const [isExecutingQuery, setIsExecutingQuery] = useState(false)
   const [selectedTable, setSelectedTable] = useState<string>("")
-  const [tableSchema, setTableSchema] = useState<any>({ columns: [], constraints: [] })
+  const [tableSchema, setTableSchema] = useState<any>(null)
   const [isLoadingSchema, setIsLoadingSchema] = useState(false)
 
   // 檢查數據庫連接
@@ -68,12 +68,7 @@ export default function DatabaseConnectionTest() {
       const result = await response.json()
 
       if (result.success) {
-        // 確保 tables 和 recentQueries 屬性存在
-        setDbStats({
-          ...result,
-          tables: result.tables || [],
-          recentQueries: result.recentQueries || []
-        })
+        setDbStats(result)
       } else {
         toast({
           title: "獲取統計信息失敗",
@@ -148,19 +143,14 @@ export default function DatabaseConnectionTest() {
     if (!tableName) return
 
     setIsLoadingSchema(true)
-    setTableSchema({ columns: [], constraints: [] })
+    setTableSchema(null)
 
     try {
       const response = await fetch(`/api/database/table-schema?table=${tableName}`)
       const result = await response.json()
 
       if (result.success) {
-        // 確保 columns 和 constraints 屬性存在
-        setTableSchema({
-          ...result,
-          columns: result.columns || [],
-          constraints: result.constraints || []
-        })
+        setTableSchema(result)
       } else {
         toast({
           title: "獲取表結構失敗",
@@ -322,14 +312,14 @@ export default function DatabaseConnectionTest() {
                   <div className="rounded-md bg-slate-50 p-4">
                     <div className="flex items-center">
                       <Table className="h-5 w-5 text-blue-500 mr-2" />
-                      <div className="text-lg font-medium">{dbStats.tableCount || 0}</div>
+                      <div className="text-lg font-medium">{dbStats.tableCount}</div>
                     </div>
                     <div className="text-sm text-gray-500 mt-1">表格數量</div>
                   </div>
                   <div className="rounded-md bg-slate-50 p-4">
                     <div className="flex items-center">
                       <Database className="h-5 w-5 text-green-500 mr-2" />
-                      <div className="text-lg font-medium">{dbStats.dbSize || '0 KB'}</div>
+                      <div className="text-lg font-medium">{dbStats.dbSize}</div>
                     </div>
                     <div className="text-sm text-gray-500 mt-1">數據庫大小</div>
                   </div>
@@ -346,30 +336,22 @@ export default function DatabaseConnectionTest() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {dbStats.tables && dbStats.tables.length > 0 ? (
-                          dbStats.tables.map((table, index) => (
-                            <tr
-                              key={index}
-                              className="hover:bg-gray-50 cursor-pointer"
-                              onClick={() => setSelectedTable(table.table_name)}
-                            >
-                              <td className="px-4 py-2 text-sm">{table.table_name}</td>
-                              <td className="px-4 py-2 text-sm">{table.column_count}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={2} className="px-4 py-2 text-sm text-center text-gray-500">
-                              無表格數據
-                            </td>
+                        {dbStats.tables.map((table, index) => (
+                          <tr
+                            key={index}
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => setSelectedTable(table.table_name)}
+                          >
+                            <td className="px-4 py-2 text-sm">{table.table_name}</td>
+                            <td className="px-4 py-2 text-sm">{table.column_count}</td>
                           </tr>
-                        )}
+                        ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                {dbStats.recentQueries && dbStats.recentQueries.length > 0 ? (
+                {dbStats.recentQueries && dbStats.recentQueries.length > 0 && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">最近的查詢</h4>
                     <div className="rounded-md border">
@@ -399,7 +381,7 @@ export default function DatabaseConnectionTest() {
                       </table>
                     </div>
                   </div>
-                ) : null}
+                )}
               </>
             ) : (
               <div className="text-center py-4">
@@ -560,7 +542,7 @@ export default function DatabaseConnectionTest() {
                   onChange={(e) => setSelectedTable(e.target.value)}
                 >
                   <option value="">選擇表格</option>
-                  {dbStats?.tables && dbStats.tables.length > 0 && dbStats.tables.map((table, index) => (
+                  {dbStats?.tables?.map((table, index) => (
                     <option key={index} value={table.table_name}>
                       {table.table_name}
                     </option>
@@ -601,37 +583,29 @@ export default function DatabaseConnectionTest() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {tableSchema.columns && tableSchema.columns.length > 0 ? (
-                            tableSchema.columns.map((column, index) => (
-                              <tr key={index}>
-                                <td className="px-4 py-2 text-sm font-medium">{column.column_name}</td>
-                                <td className="px-4 py-2 text-sm">
-                                  {column.data_type}
-                                  {column.character_maximum_length ? `(${column.character_maximum_length})` : ""}
-                                </td>
-                                <td className="px-4 py-2 text-sm">
-                                  {column.is_nullable === "YES" ? (
-                                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                                      可空
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                                      非空
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2 text-sm font-mono">
-                                  {column.column_default || <span className="text-gray-400">無</span>}
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-2 text-sm text-center text-gray-500">
-                                無列信息
+                          {tableSchema.columns.map((column, index) => (
+                            <tr key={index}>
+                              <td className="px-4 py-2 text-sm font-medium">{column.column_name}</td>
+                              <td className="px-4 py-2 text-sm">
+                                {column.data_type}
+                                {column.character_maximum_length ? `(${column.character_maximum_length})` : ""}
+                              </td>
+                              <td className="px-4 py-2 text-sm">
+                                {column.is_nullable === "YES" ? (
+                                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                                    可空
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                                    非空
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-mono">
+                                {column.column_default || <span className="text-gray-400">無</span>}
                               </td>
                             </tr>
-                          )}
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -640,7 +614,7 @@ export default function DatabaseConnectionTest() {
                   <div className="rounded-md border">
                     <div className="bg-slate-50 px-4 py-2 font-medium border-b">{selectedTable} - 約束信息</div>
                     <div className="p-4">
-                      {tableSchema.constraints && tableSchema.constraints.length > 0 ? (
+                      {tableSchema.constraints.length > 0 ? (
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead>
                             <tr>
@@ -683,9 +657,7 @@ export default function DatabaseConnectionTest() {
                                     </Badge>
                                   )}
                                 </td>
-                                <td className="px-4 py-2 text-sm">
-                                  {constraint.column_name}
-                                </td>
+                                <td className="px-4 py-2 text-sm">{constraint.column_name}</td>
                                 <td className="px-4 py-2 text-sm">
                                   {constraint.foreign_table_name || <span className="text-gray-400">-</span>}
                                 </td>

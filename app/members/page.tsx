@@ -1,13 +1,16 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import type { Metadata } from "next"
 import DashboardHeader from "@/components/dashboard-header"
 import MemberList from "@/components/member-list"
-import { getAllMembers } from "@/lib/members-db"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { PlusCircle } from "lucide-react"
 
-export default async function MembersPage() {
-  // 從數據庫獲取會員數據
-  const members = await getAllMembers()
+export const metadata: Metadata = {
+  title: "交易系統 - 會員管理",
+  description: "交易系統會員管理",
+}
 
+export default function MembersPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <DashboardHeader />
@@ -15,11 +18,14 @@ export default async function MembersPage() {
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold">會員管理</h1>
           <Link href="/members/new">
-            <Button>新增會員</Button>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              新增會員
+            </Button>
           </Link>
         </div>
 
-        <MemberList initialMembers={members} />
+        <MemberList />
       </main>
     </div>
   )

@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
+  let databaseUrl: string | null = null // Declare databaseUrl here
+
   try {
     // Get the URL parameters
     const url = new URL(request.url)
     const connectionString = url.searchParams.get("connectionString")
 
     // Use the provided connection string or fall back to environment variable
-    const databaseUrl = connectionString || process.env.DATABASE_URL
+    databaseUrl = connectionString || process.env.DATABASE_URL
 
     if (!databaseUrl) {
       return NextResponse.json({
@@ -62,10 +64,27 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error getting database connection info:", error)
 
+    // 提供更詳細的錯誤信息
+    let errorDetails = "未知錯誤"
+    let errorCode = ""
+
+    if (error instanceof Error) {
+      errorDetails = error.message
+      // 嘗試提取 PostgreSQL 錯誤代碼
+      const pgErrorMatch = error.message.match(/SQLSTATE\[(\w+)\]/)
+      if (pgErrorMatch) {
+        errorCode = pgErrorMatch[1]
+      }
+    }
+
     return NextResponse.json({
       connected: false,
       error: "獲取數據庫連接信息失敗",
-      details: error.message,
+      details: errorDetails,
+      errorCode: errorCode,
+      // 如果有連接字符串，返回掩碼版本以便調試
+      connectionStringProvided: !!databaseUrl,
+      connectionStringMasked: databaseUrl ? maskConnectionString(databaseUrl) : null,
     })
   }
 }
@@ -104,6 +123,15 @@ function parseConnectionString(connectionString) {
       connectionStringValid: false,
       error: e.message,
     }
+  }
+}
+
+// 添加一個函數來掩碼連接字符串中的敏感信息
+function maskConnectionString(connectionString) {
+  try {
+    return connectionString.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@")
+  } catch (e) {
+    return "無法掩碼連接字符串"
   }
 }
 

@@ -42,7 +42,6 @@ export default function DatabaseTestingPanel() {
   const [isLoadingTableStats, setIsLoadingTableStats] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
   // 新增表單狀態
   const [host, setHost] = useState("localhost")
@@ -57,7 +56,7 @@ export default function DatabaseTestingPanel() {
   useEffect(() => {
     const customDatabaseUrl = localStorage.getItem("customDatabaseUrl")
     if (customDatabaseUrl) {
-      console.log("使用自定義數據庫連接字符串:", customDatabaseUrl.replace(/:[^:@]+@/, ":****@"))
+      console.log("使用自定義數據庫連接字符串:", customDatabaseUrl)
       setDirectConnectionString(customDatabaseUrl)
       // 嘗試解析連接字符串以填充表單
       try {
@@ -121,127 +120,42 @@ export default function DatabaseTestingPanel() {
       return
     }
 
-    // 驗證連接字符串格式
-    if (!directConnectionString.startsWith("postgres://")) {
-      toast({
-        title: "連接字符串格式錯誤",
-        description: "連接字符串應以 'postgres://' 開頭",
-        variant: "destructive",
-      })
-      return
-    }
-
     setIsLoading(true)
     setConnectionStatus("checking")
     setConnectionDetails(null)
-    setDebugInfo(null)
-    setError(null)
 
     try {
-      console.log("Testing connection with string:", directConnectionString.replace(/:[^:@]+@/, ":****@"))
+      const response = await fetch("/api/database/test-direct-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ connectionString: directConnectionString }),
+      })
 
-      // Create a safe request payload
-      const payload = JSON.stringify({ connectionString: directConnectionString })
+      const data = await response.json()
 
-      console.log("Sending request to test-direct-connection API")
-
-      // Use fetch with a timeout
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-
-      try {
-        const response = await fetch("/api/database/test-direct-connection", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: payload,
-          signal: controller.signal,
+      if (data.success) {
+        setConnectionStatus("connected")
+        setConnectionDetails(data)
+        localStorage.setItem("customDatabaseUrl", directConnectionString)
+        toast({
+          title: "連接成功",
+          description: `成功連接到數據庫 ${data.dbName || data.database}`,
         })
-
-        clearTimeout(timeoutId)
-
-        console.log("Received response:", response.status, response.statusText)
-
-        // Handle non-OK responses before attempting to parse JSON
-        if (!response.ok) {
-          let errorMessage = `Server error: ${response.status} ${response.statusText}`
-
-          try {
-            // Try to get more details from the response
-            const errorText = await response.text()
-            console.error("Server error response:", errorText)
-
-            // Try to parse as JSON if possible
-            try {
-              const errorJson = JSON.parse(errorText)
-              errorMessage = errorJson.error || errorMessage
-              if (errorJson.details || errorJson.stack) {
-                setDebugInfo(errorJson.details || errorJson.stack)
-              }
-            } catch (jsonError) {
-              // If we can't parse as JSON, use the text (truncated)
-              if (errorText && errorText.length > 0) {
-                errorMessage = `${errorMessage}: ${errorText.substring(0, 100)}${errorText.length > 100 ? "..." : ""}`
-                setDebugInfo(errorText)
-              }
-            }
-          } catch (textError) {
-            console.error("Failed to read error response:", textError)
-          }
-
-          throw new Error(errorMessage)
-        }
-
-        // Now try to parse the JSON response
-        let data
-        try {
-          const responseText = await response.text()
-          console.log("Raw response:", responseText.substring(0, 200)) // Log the beginning of the response
-
-          if (!responseText || responseText.trim() === "") {
-            throw new Error("Empty response from server")
-          }
-
-          data = JSON.parse(responseText)
-        } catch (jsonError) {
-          console.error("JSON parsing error:", jsonError)
-          throw new Error(`Failed to parse server response as JSON: ${jsonError.message}`)
-        }
-
-        if (data.success) {
-          setConnectionStatus("connected")
-          setConnectionDetails(data)
-          localStorage.setItem("customDatabaseUrl", directConnectionString)
-          toast({
-            title: "連接成功",
-            description: `成功連接到數據庫 ${data.database || data.dbName}`,
-          })
-        } else {
-          setConnectionStatus("error")
-          setConnectionDetails({ error: data.error })
-          setDebugInfo(data.originalError || data.stack || null)
-          setError(data.error || "未知錯誤")
-          toast({
-            title: "連接失敗",
-            description: data.error || "未知錯誤",
-            variant: "destructive",
-          })
-        }
-      } catch (fetchError) {
-        clearTimeout(timeoutId)
-
-        if (fetchError.name === "AbortError") {
-          throw new Error("連接請求超時，請檢查數據庫服務器是否可訪問")
-        }
-
-        throw fetchError
+      } else {
+        setConnectionStatus("error")
+        setConnectionDetails({ error: data.error })
+        toast({
+          title: "連接失敗",
+          description: data.error,
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error testing connection:", error)
       setConnectionStatus("error")
       setConnectionDetails({ error: error.message })
-      setError(error.message || "未知錯誤")
       toast({
         title: "連接失敗",
         description: error.message,
@@ -334,24 +248,19 @@ export default function DatabaseTestingPanel() {
         body: JSON.stringify({ query: testQuery }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        setQueryResult({
-          success: true,
-          data: data.result,
-          rowCount: data.rowCount,
-          duration: data.duration || "N/A",
-        })
+      if (result.success) {
+        setQueryResult(result)
         toast({
           title: "查詢執行成功",
-          description: `查詢已成功執行${data.duration ? `，耗時 ${data.duration}` : ""}`,
+          description: `查詢已成功執行，耗時 ${result.duration}`,
         })
       } else {
-        setQueryResult({ success: false, error: data.error })
+        setQueryResult({ success: false, error: result.error })
         toast({
           title: "查詢執行失敗",
-          description: data.error,
+          description: result.error,
           variant: "destructive",
         })
       }
@@ -467,12 +376,6 @@ export default function DatabaseTestingPanel() {
     }
 
     try {
-      // 顯示加載狀態
-      toast({
-        title: "正在生成測試數據",
-        description: "請稍候...",
-      })
-
       const response = await fetch("/api/database/generate-test-data", {
         method: "POST",
         headers: {
@@ -481,33 +384,27 @@ export default function DatabaseTestingPanel() {
         body: JSON.stringify({ table: tableToTest, count: recordCount }),
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`)
-      }
-
       const result = await response.json()
 
       if (result.success) {
         toast({
           title: "測試數據生成成功",
-          description: result.message || `成功為 ${tableToTest} 表生成了 ${recordCount} 條測試數據`,
+          description: result.message,
         })
 
         // 刷新表統計信息
         getTableStats()
       } else {
-        console.error("生成測試數據失敗:", result.error)
         toast({
           title: "測試數據生成失敗",
-          description: result.error || "未知錯誤",
+          description: result.error,
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("生成測試數據時出錯:", error)
       toast({
         title: "測試數據生成失敗",
-        description: error.message || "請檢查網絡連接和服務器狀態",
+        description: error.message,
         variant: "destructive",
       })
     }
@@ -650,19 +547,8 @@ export default function DatabaseTestingPanel() {
                     type="button"
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     onClick={testDirectConnection}
-                    disabled={isLoading}
                   >
-                    {isLoading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        測試中...
-                      </>
-                    ) : (
-                      <>
-                        <Server className="mr-2 h-4 w-4" />
-                        測試連接
-                      </>
-                    )}
+                    測試連接
                   </button>
                   <button
                     type="button"
@@ -764,19 +650,8 @@ export default function DatabaseTestingPanel() {
                   type="button"
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   onClick={connectToDatabase}
-                  disabled={isLoading}
                 >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      連接中...
-                    </>
-                  ) : (
-                    <>
-                      <Server className="mr-2 h-4 w-4" />
-                      連接數據庫
-                    </>
-                  )}
+                  連接數據庫
                 </button>
                 <button
                   type="button"
@@ -799,13 +674,6 @@ export default function DatabaseTestingPanel() {
                   {error || (connectionDetails && connectionDetails.error) || "未知錯誤"}
                 </AlertDescription>
               </Alert>
-            )}
-
-            {debugInfo && (
-              <div className="mt-2 p-3 bg-gray-100 rounded-md text-xs font-mono overflow-auto max-h-32">
-                <p className="text-gray-500 mb-1">詳細錯誤信息:</p>
-                <p className="text-gray-700">{debugInfo}</p>
-              </div>
             )}
 
             <div className="rounded-md border p-4">
@@ -1122,7 +990,6 @@ export default function DatabaseTestingPanel() {
                     <Button
                       onClick={generateTestData}
                       disabled={!tableToTest || recordCount <= 0 || recordCount > 1000}
-                      className="w-full"
                     >
                       <Upload className="mr-2 h-4 w-4" />
                       生成測試數據

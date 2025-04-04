@@ -4,8 +4,39 @@ import { drizzle } from "drizzle-orm/neon-http"
 // 配置 Neon 客戶端
 neonConfig.fetchConnectionCache = true
 
+// 添加重試邏輯
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000 // 1秒
+
+// 創建帶有重試邏輯的 SQL 客戶端
+const createSqlClient = (url) => {
+  const client = neon(url)
+
+  // 包裝原始查詢方法以添加重試邏輯
+  const originalQuery = client.query.bind(client)
+  client.query = async (...args) => {
+    let lastError
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await originalQuery(...args)
+      } catch (error) {
+        lastError = error
+        console.warn(`數據庫查詢失敗 (嘗試 ${attempt}/${MAX_RETRIES}):`, error.message)
+
+        // 如果不是最後一次嘗試，則等待後重試
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY))
+        }
+      }
+    }
+    throw lastError // 所有重試都失敗後拋出最後一個錯誤
+  }
+
+  return client
+}
+
 // 創建 SQL 客戶端
-const sql = neon(process.env.DATABASE_URL!)
+const sql = createSqlClient(process.env.DATABASE_URL!)
 
 // 創建 Drizzle ORM 實例
 export const db = drizzle(sql)
