@@ -1,141 +1,204 @@
-import { openDB } from "idb"
+import { openDB, type DBSchema, type IDBPDatabase } from "idb"
 
-const DB_NAME = "tsystem1-pwa"
+// 定義數據庫結構
+interface TradingSystemDB extends DBSchema {
+  transactions: {
+    key: string
+    value: {
+      id: string
+      type: string
+      amount: number
+      memberId?: string
+      memberName?: string
+      description?: string
+      project?: string
+      timestamp: number
+      synced: boolean
+    }
+    indexes: { "by-timestamp": number; "by-synced": boolean }
+  }
+  members: {
+    key: string
+    value: {
+      id: string
+      name: string
+      balance: number
+      lastUpdated: number
+    }
+    indexes: { "by-name": string }
+  }
+  settings: {
+    key: string
+    value: any
+  }
+}
+
+// 數據庫版本
 const DB_VERSION = 1
 
-export async function initDB() {
-  const db = await openDB(DB_NAME, DB_VERSION, {
+// 數據庫名稱
+const DB_NAME = "trading-system-db"
+
+// 初始化數據庫
+export async function initDB(): Promise<IDBPDatabase<TradingSystemDB>> {
+  return openDB<TradingSystemDB>(DB_NAME, DB_VERSION, {
     upgrade(db) {
-      // 创建存储对象
-      if (!db.objectStoreNames.contains("offlineData")) {
-        db.createObjectStore("offlineData", { keyPath: "id" })
+      // 交易存儲
+      if (!db.objectStoreNames.contains("transactions")) {
+        const transactionStore = db.createObjectStore("transactions", { keyPath: "id" })
+        transactionStore.createIndex("by-timestamp", "timestamp")
+        transactionStore.createIndex("by-synced", "synced")
       }
 
-      if (!db.objectStoreNames.contains("transactions")) {
-        const transactionsStore = db.createObjectStore("transactions", { keyPath: "id" })
-        transactionsStore.createIndex("timestamp", "timestamp")
-        transactionsStore.createIndex("synced", "synced")
+      // 會員存儲
+      if (!db.objectStoreNames.contains("members")) {
+        const memberStore = db.createObjectStore("members", { keyPath: "id" })
+        memberStore.createIndex("by-name", "name")
+      }
+
+      // 設置存儲
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" })
       }
     },
   })
-
-  return db
 }
 
-export async function getDB() {
-  return await initDB()
+// 獲取數據庫實例
+let dbPromise: Promise<IDBPDatabase<TradingSystemDB>> | null = null
+
+export function getDB(): Promise<IDBPDatabase<TradingSystemDB>> {
+  if (!dbPromise) {
+    dbPromise = initDB()
+  }
+  return dbPromise
 }
 
-export async function saveOfflineData(data: any) {
-  const db = await initDB()
-  const tx = db.transaction("offlineData", "readwrite")
-  await tx.store.put(data)
-  return await tx.done
-}
-
-export async function getOfflineData(id: string) {
-  const db = await initDB()
-  return await db.get("offlineData", id)
-}
-
-export async function getAllOfflineData() {
-  const db = await initDB()
-  return await db.getAll("offlineData")
-}
-
+// 交易相關操作
 export async function saveTransaction(transaction: any) {
-  const db = await initDB()
-  const tx = db.transaction("transactions", "readwrite")
+  const db = await getDB()
+  transaction.synced = navigator.onLine
+  transaction.timestamp = Date.now()
+  await db.put("transactions", transaction)
 
-  // 确保交易有一个 ID 和时间戳
-  const transactionToSave = {
-    ...transaction,
-    id: transaction.id || crypto.randomUUID(),
-    timestamp: transaction.timestamp || new Date().getTime(),
-    synced: false,
+  // 如果在線，嘗試同步
+  if (navigator.onLine) {
+    syncTransactions()
+  } else {
+    // 如果離線，註冊後台同步
+    registerBackgroundSync()
   }
 
-  await tx.store.put(transactionToSave)
-  return await tx.done
+  return transaction
 }
 
-export async function getUnsynedTransactions() {
-  const db = await initDB()
-  const tx = db.transaction("transactions", "readonly")
-  const index = tx.store.index("synced")
-  return await index.getAll(false)
+export async function getTransactions() {
+  const db = await getDB()
+  return db.getAllFromIndex("transactions", "by-timestamp")
+}
+
+export async function getUnsyncedTransactions() {
+  const db = await getDB()
+  return db.getAllFromIndex("transactions", "by-synced", false)
 }
 
 export async function markTransactionSynced(id: string) {
-  const db = await initDB()
-  const tx = db.transaction("transactions", "readwrite")
-  const transaction = await tx.store.get(id)
-
-  if (transaction) {
-    transaction.synced = true
-    await tx.store.put(transaction)
+  const db = await getDB()
+  const tx = await db.get("transactions", id)
+  if (tx) {
+    tx.synced = true
+    await db.put("transactions", tx)
   }
-
-  return await tx.done
 }
 
-export async function syncTransactions() {
-  const unsynced = await getUnsynedTransactions()
+// 會員相關操作
+export async function saveMember(member: any) {
+  const db = await getDB()
+  member.lastUpdated = Date.now()
+  await db.put("members", member)
+  return member
+}
 
-  if (unsynced.length === 0) {
-    return { success: true, message: "没有需要同步的交易" }
+export async function getMembers() {
+  const db = await getDB()
+  return db.getAll("members")
+}
+
+export async function getMemberById(id: string) {
+  const db = await getDB()
+  return db.get("members", id)
+}
+
+export async function searchMembersByName(name: string) {
+  const db = await getDB()
+  const members = await db.getAll("members")
+  return members.filter((member) => member.name.toLowerCase().includes(name.toLowerCase()))
+}
+
+// 設置相關操作
+export async function saveSetting(key: string, value: any) {
+  const db = await getDB()
+  await db.put("settings", { key, value })
+}
+
+export async function getSetting(key: string) {
+  const db = await getDB()
+  const setting = await db.get("settings", key)
+  return setting ? setting.value : null
+}
+
+// 後台同步
+export async function registerBackgroundSync() {
+  if ("serviceWorker" in navigator && "SyncManager" in window) {
+    try {
+      const registration = await navigator.serviceWorker.ready
+      await registration.sync.register("sync-transactions")
+    } catch (err) {
+      console.error("Background sync registration failed:", err)
+    }
   }
+}
+
+// 同步交易到服務器
+export async function syncTransactions() {
+  if (!navigator.onLine) return
+
+  const unsyncedTransactions = await getUnsyncedTransactions()
+  if (unsyncedTransactions.length === 0) return
 
   try {
-    // 这里应该是实际的同步逻辑，例如发送到服务器
-    // 这只是一个示例
-    for (const transaction of unsynced) {
-      // 模拟发送到服务器
-      console.log("同步交易:", transaction)
+    for (const tx of unsyncedTransactions) {
+      // 發送到服務器
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(tx),
+      })
 
-      // 标记为已同步
-      await markTransactionSynced(transaction.id)
-    }
-
-    return {
-      success: true,
-      message: `成功同步 ${unsynced.length} 个交易`,
+      if (response.ok) {
+        await markTransactionSynced(tx.id)
+      }
     }
   } catch (error) {
-    console.error("同步交易失败:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
+    console.error("Error syncing transactions:", error)
   }
 }
 
-export async function cleanupOldData(daysToKeep = 30) {
-  const db = await initDB()
-  const tx = db.transaction("transactions", "readwrite")
-  const index = tx.store.index("timestamp")
+// 清除過期數據
+export async function cleanupOldData() {
+  const db = await getDB()
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
 
-  const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)
-  const cutoffTimestamp = cutoffDate.getTime()
+  // 獲取所有交易
+  const transactions = await db.getAllFromIndex("transactions", "by-timestamp")
 
-  // 获取所有旧交易
-  const range = IDBKeyRange.upperBound(cutoffTimestamp)
-  const oldTransactions = await index.getAll(range)
-
-  // 删除旧交易
-  for (const transaction of oldTransactions) {
-    if (transaction.synced) {
-      // 只删除已同步的交易
-      await tx.store.delete(transaction.id)
+  // 刪除30天前的已同步交易
+  for (const tx of transactions) {
+    if (tx.synced && tx.timestamp < thirtyDaysAgo) {
+      await db.delete("transactions", tx.id)
     }
-  }
-
-  await tx.done
-
-  return {
-    success: true,
-    message: `清理了 ${oldTransactions.length} 个旧交易`,
   }
 }
 
