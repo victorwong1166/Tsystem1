@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import DashboardHeader from "@/components/dashboard-header"
 import DashboardSummary from "@/components/dashboard-summary"
 import QuickTransaction from "@/components/quick-transaction"
 import TransactionList from "@/components/transaction-list"
 import CustomerDebtList from "@/components/customer-debt-list"
 import CheckoutModal from "@/components/checkout-modal"
+import { StaffPosDashboard } from "@/app/components/staff-pos-dashboard"
 import { Button } from "@/components/ui/button"
 import { ClockIcon, Users, PieChart, FileText, ClipboardCheck } from "lucide-react"
 import Link from "next/link"
@@ -18,7 +19,18 @@ export default function DashboardPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [showDividendInfo, setShowDividendInfo] = useState(false)
   const [showSignTable, setShowSignTable] = useState(false)
+  const [showPosDashboard, setShowPosDashboard] = useState(false)
+  const [userRole, setUserRole] = useState<string>('STAFF')
+  const [userId, setUserId] = useState<string>('')
   const nextSettlementDate = addDays(new Date(), 3 - (new Date().getDate() % 3))
+
+  useEffect(() => {
+    // 從 localStorage 或 session 讀取用戶角色和 ID
+    const storedRole = localStorage.getItem('userRole') || 'STAFF'
+    const storedId = localStorage.getItem('userId') || ''
+    setUserRole(storedRole)
+    setUserId(storedId)
+  }, [])
 
   const handleDebtClick = () => {
     setShowDebtList(true)
@@ -46,29 +58,59 @@ export default function DashboardPage() {
       <DashboardHeader />
       <main className="flex-1 p-4 md:p-6">
         <div className="mb-6 flex justify-between items-center">
-          <h1 className="text-2xl sm:text-3xl font-bold">儀表板</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 px-3 border-green-300 text-green-700 hover:bg-green-50"
-            asChild
-          >
-            <Link href="/settlements/new">
-              <ClipboardCheck className="mr-2 h-3.5 w-3.5" />
-              結算
-            </Link>
-          </Button>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {showPosDashboard ? 'POS 交易系統' : '儀表板'}
+          </h1>
+          <div className="flex gap-2">
+            {userRole === 'STAFF' && (
+              <Button
+                variant={showPosDashboard ? 'default' : 'outline'}
+                size="sm"
+                className={`h-8 px-3 ${
+                  showPosDashboard
+                    ? 'bg-gray-900 text-white'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+                onClick={() => setShowPosDashboard(!showPosDashboard)}
+              >
+                💳 POS 系統
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 border-green-300 text-green-700 hover:bg-green-50"
+              asChild
+            >
+              <Link href="/settlements/new">
+                <ClipboardCheck className="mr-2 h-3.5 w-3.5" />
+                結算
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        {/* 交易表單模組 */}
-        <div className="mb-6">
-          <QuickTransaction />
-        </div>
+        {/* POS 儀表板或傳統儀表板 */}
+        {showPosDashboard ? (
+          <div className="mb-6">
+            <StaffPosDashboard userId={userId} />
+          </div>
+        ) : (
+          <>
+            {/* 交易表單模組 */}
+            <div className="mb-6">
+              <QuickTransaction />
+            </div>
+          </>
+        )}
 
-        {/* 將 DashboardSummary 移到這裡 */}
-        <DashboardSummary onDebtClick={handleDebtClick} />
+        {/* 只在非 POS 模式下顯示傳統儀表板 */}
+        {!showPosDashboard && (
+          <>
+            {/* 將 DashboardSummary 移到這裡 */}
+            <DashboardSummary onDebtClick={handleDebtClick} />
 
-        <div className="mt-6 md:mt-8">
+            <div className="mt-6 md:mt-8">
           <Card className="mb-4 shadow-sm">
             <CardHeader className="py-3 px-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -167,7 +209,9 @@ export default function DashboardPage() {
               <TransactionList showOnlyToday={true} />
             </>
           )}
-        </div>
+            </div>
+          </>
+        )}
       </main>
 
       <CheckoutModal open={checkoutOpen} onOpenChange={setCheckoutOpen} />

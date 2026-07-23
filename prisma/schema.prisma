@@ -1,6 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// Tsystem1 集中資料庫結構 - Prisma Schema
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,131 +8,110 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===== 1. User 使用者帳戶表 =====
 model User {
   id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String?
-  role          Role      @default(USER)
-  avatar        String?
-  bio           String?
-  posts         Post[]
-  comments      Comment[]
-  transactions  Transaction[]
-  notifications Notification[]
+  username      String    @unique
+  password      String
+  role          UserRole  @default(STAFF)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  
+  // 關聯
+  transactions  Transaction[]
+  shiftLogs     ShiftLog[]
+  
+  @@map("users")
 }
 
-model Post {
-  id        String    @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean   @default(false)
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id])
-  comments  Comment[]
-  categories CategoryOnPost[]
-  tags      TagOnPost[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+// ===== 2. Member 會員/客戶表 =====
+model Member {
+  id            String    @id @default(cuid())
+  name          String
+  phone         String?
+  balance       Float     @default(0)
+  creditLimit   Float     @default(0)
+  currentDebt   Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // 關聯
+  transactions  Transaction[]
+  
+  @@map("members")
 }
 
-model Comment {
-  id        String   @id @default(cuid())
-  content   String
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Category {
-  id    String          @id @default(cuid())
-  name  String          @unique
-  posts CategoryOnPost[]
-}
-
-model CategoryOnPost {
-  postId     String
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  assignedAt DateTime @default(now())
-
-  @@id([postId, categoryId])
-}
-
-model Tag {
-  id    String      @id @default(cuid())
-  name  String      @unique
-  posts TagOnPost[]
-}
-
-model TagOnPost {
-  postId     String
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  tagId      String
-  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
-  assignedAt DateTime @default(now())
-
-  @@id([postId, tagId])
-}
-
+// ===== 3. Transaction 交易記錄表 =====
 model Transaction {
-  id          String   @id @default(cuid())
-  amount      Float
-  description String?
-  type        TransactionType
-  status      TransactionStatus @default(PENDING)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(cuid())
+  memberId      String
+  member        Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  type          TransactionType
+  amount        Float
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  shiftId       String?
+  shiftLog      ShiftLog? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([memberId])
+  @@index([userId])
+  @@index([shiftId])
+  @@map("transactions")
 }
 
-model Notification {
-  id        String           @id @default(cuid())
-  title     String
-  content   String
-  type      NotificationType
-  read      Boolean          @default(false)
-  userId    String
-  user      User             @relation(fields: [userId], references: [id])
-  createdAt DateTime         @default(now())
+// ===== 4. ShiftLog 班次記錄表 =====
+model ShiftLog {
+  id            String    @id @default(cuid())
+  managerId     String
+  manager       User      @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  
+  expectedCash  Float     @default(0)
+  actualCash    Float     @default(0)
+  discrepancy   Float     @default(0)
+  isClosed      Boolean   @default(false)
+  
+  createdAt     DateTime  @default(now())
+  closedAt      DateTime?
+  
+  // 關聯
+  transactions  Transaction[]
+  
+  @@index([managerId])
+  @@map("shift_logs")
 }
 
-model Setting {
-  id    String @id @default(cuid())
-  key   String @unique
-  value String
+// ===== 5. SystemConfig 系統配置表 =====
+model SystemConfig {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  value         Json      // 存儲 JSON 格式的配置值
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("system_configs")
 }
 
-enum Role {
-  USER
-  ADMIN
-  EDITOR
+// ===== 列舉定義 =====
+enum UserRole {
+  STAFF           // 基層員工（可進行交易）
+  MANAGER         // 經理（可結班）
+  ADMIN           // 管理員（全權限）
 }
 
 enum TransactionType {
-  DEPOSIT
-  WITHDRAWAL
-  TRANSFER
-}
-
-enum TransactionStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum NotificationType {
-  INFO
-  SUCCESS
-  WARNING
-  ERROR
+  CASH_BUY_IN    // 現金買入
+  CREDIT_SIGN_IN // 信用簽帳
+  CASH_OUT       // 現金取出
+  DEBT_REPAY     // 債務還款
+  VAULT_IN       // 金庫進帳
+  VAULT_OUT      // 金庫出帳
+  DEPOSIT        // 存款
+  WITHDRAWAL     // 提款
 }
 
