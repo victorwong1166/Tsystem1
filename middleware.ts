@@ -15,7 +15,32 @@ export function middleware(request: NextRequest) {
     return response
   }
 
-  return NextResponse.next()
+  // ===== POS 系統權限防護 =====
+  // 檢查登入狀態和角色
+  const userRole = request.cookies.get("userRole")?.value || ""
+  const userId = request.cookies.get("userId")?.value || ""
+  const isLoggedIn = request.cookies.get("isLoggedIn")?.value === "true"
+
+  // POS 相關路徑需要登入且角色為 STAFF 或以上
+  const posProtectedPaths = ["/dashboard"]
+  const isPosPath = posProtectedPaths.some((p) => path === p || path.startsWith(`${p}/`))
+
+  if (isPosPath && !isLoggedIn) {
+    // 未登入，重定向到登入頁
+    return NextResponse.redirect(new URL("/login", request.url))
+  }
+
+  if (isPosPath && isLoggedIn && !["STAFF", "MANAGER", "ADMIN"].includes(userRole)) {
+    // 沒有權限訪問，重定向到首頁
+    return NextResponse.redirect(new URL("/", request.url))
+  }
+
+  // 將用戶角色資訊添加到請求頭，供後端使用
+  const response = NextResponse.next()
+  if (userId) response.headers.set("x-user-id", userId)
+  if (userRole) response.headers.set("x-user-role", userRole)
+
+  return response
 }
 
 export const config = {
